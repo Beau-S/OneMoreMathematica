@@ -8,18 +8,40 @@ namespace River.OneMoreAddIn.Commands
 	using River.OneMoreAddIn.Models;
 	using River.OneMoreAddIn.Settings;
 	using River.OneMoreAddIn.UI;
+	using System.Drawing;
 	using System.Globalization;
 	using System.Linq;
 	using System.Threading.Tasks;
-	using System.Windows.Forms;
 	using System.Xml.Linq;
 
 
 	/// <summary>
-	/// Opens the Mathematica-syntax equation editor and inserts the result at the cursor,
-	/// either as a native OneNote equation (MathML) or as a rendered PNG image. If the cursor
-	/// is on an equation previously inserted by this command, that equation is opened for
-	/// editing and replaced in place.
+	/// An equation inserted by this command, found under OneNote's cursor
+	/// </summary>
+	internal sealed class SelectedEquation
+	{
+		/// <summary>The objectID of the paragraph (OE) holding the equation</summary>
+		public string ObjectId { get; set; }
+
+		/// <summary>The Mathematica source stored with the equation</summary>
+		public string Source { get; set; }
+	}
+
+
+	internal enum EquationOutcome
+	{
+		Inserted,
+		Replaced,
+		NoAnchor,
+		Empty
+	}
+
+
+	/// <summary>
+	/// Opens the Mathematica-syntax equation editor as a side panel next to OneNote. The panel
+	/// inserts equations at OneNote's cursor, either as native OneNote equations (MathML) or as
+	/// rendered PNG images. If the cursor is on an equation previously inserted by the editor,
+	/// that equation is loaded for editing and replaced in place.
 	/// </summary>
 	internal class EquationCommand : Command
 	{
@@ -37,70 +59,127 @@ namespace River.OneMoreAddIn.Commands
 
 		public override async Task Execute(params object[] args)
 		{
-			await using var one = new OneNote(out var page, out var ns);
-			PageNamespace.Set(ns);
+			SelectedEquation selected = null;
+			Rectangle bounds;
 
-			var anchor = FindAnchor(page, ns);
-			if (anchor is null)
+			await using (var one = new OneNote(out var page, out var ns))
 			{
-				ShowError("Click into a paragraph in the page body, then run Insert Equation again.");
-				return;
+				bounds = one.GetCurrentMainWindowBounds();
+				if (page is not null)
+				{
+					selected = ReadSelected(page, ns);
+				}
 			}
-
-			var existing = anchor.Elements(ns + "Meta")
-				.FirstOrDefault(e => e.Attribute("name")?.Value == SourceMetaKey);
 
 			var settings = new SettingsProvider().GetCollection(SettingsName);
 			var init = new JObject
 			{
-				["source"] = existing?.Attribute("content")?.Value ?? string.Empty,
-				["editing"] = existing is not null,
+				["source"] = string.Empty,
+				["editing"] = false,
 				["mode"] = settings.Get("mode", "native"),
 				["size"] = settings.Get("size", 20),
 				["color"] = "#000000",
 				["theme"] = ThemeManager.Instance.DarkMode ? "dark" : "light"
 			};
 
-			var result = await SingleThreaded.Invoke(() =>
-			{
-				// WebView2 needs an STA thread with a message pump
-				using (var dialog = new EquationDialog(init))
-				{
-					return dialog.ShowDialog(owner) == DialogResult.OK ? dialog.Result : null;
-				}
-			});
+			// returns immediately; the panel runs on its own thread
+			EquationDialog.Present(init, selected, bounds);
+		}
 
-			if (result is null)
+
+		/// <summary>
+		/// Returns the editor equation under OneNote's cursor, or null
+		/// </summary>
+		public static SelectedEquation ReadSelected(Page page, XNamespace ns)
+		{
+			var anchor = FindAnchor(page, ns);
+			var meta = anchor?.Elements(ns + "Meta")
+				.FirstOrDefault(e => e.Attribute("name")?.Value == SourceMetaKey);
+
+			if (meta is null)
 			{
-				IsCancelled = true;
-				return;
+				return null;
 			}
 
+			return new SelectedEquation
+			{
+				ObjectId = anchor.Attribute("objectID")?.Value,
+				Source = meta.Attribute("content")?.Value ?? string.Empty
+			};
+		}
+
+
+		/// <summary>
+		/// Inserts or replaces an equation on the given page; the caller saves the page.
+		/// </summary>
+		/// <param name="page">The current page, read with selection detail</param>
+		/// <param name="ns">The page namespace</param>
+		/// <param name="result">The equation to insert</param>
+		/// <param name="editingId">
+		/// objectID of the equation paragraph being edited, or null to insert a new one
+		/// </param>
+		public static EquationOutcome Apply(
+			Page page, XNamespace ns, EquationResult result, string editingId)
+		{
 			var content = result.Mode == "image"
 				? MakeImage(ns, result)
 				: MakeEquation(ns, result);
 
 			if (content is null)
 			{
-				ShowError("The equation editor returned nothing to insert.");
-				return;
+				return EquationOutcome.Empty;
 			}
 
 			var meta = new Meta(ns, SourceMetaKey, result.Source ?? string.Empty);
 
-			if (existing is not null || IsEmptyParagraph(anchor, ns))
+			if (!string.IsNullOrEmpty(editingId))
 			{
-				// replace the contents of this paragraph, keeping its objectID so OneNote
-				// updates it in place rather than adding a new paragraph
-				anchor.Elements().Where(e => e.Name != ns + "OEChildren").Remove();
-				anchor.AddFirst(meta, content);
-			}
-			else
-			{
-				anchor.AddAfterSelf(new XElement(ns + "OE", meta, content));
+				var target = page.Root.Descendants(ns + "OE")
+					.FirstOrDefault(e => e.Attribute("objectID")?.Value == editingId);
+
+				if (target is not null)
+				{
+					Fill(target, ns, meta, content);
+					return EquationOutcome.Replaced;
+				}
 			}
 
-			await one.Update(page);
+			var anchor = FindAnchor(page, ns);
+			if (anchor is null)
+			{
+				return EquationOutcome.NoAnchor;
+			}
+
+			if (IsEmptyParagraph(anchor, ns))
+			{
+				// reuse the empty line the cursor sits on
+				Fill(anchor, ns, meta, content);
+				return EquationOutcome.Inserted;
+			}
+
+			// insert after the cursor's paragraph and after any equations already inserted
+			// there, so a series of equations stays in the order it was typed
+			var after = anchor;
+			while (after.NextNode is XElement next &&
+				next.Name == ns + "OE" &&
+				next.Elements(ns + "Meta").Any(m => m.Attribute("name")?.Value == SourceMetaKey))
+			{
+				after = next;
+			}
+
+			after.AddAfterSelf(new XElement(ns + "OE", meta, content));
+			return EquationOutcome.Inserted;
+		}
+
+
+		/// <summary>
+		/// Replaces the contents of a paragraph, keeping its objectID so OneNote updates it in
+		/// place rather than adding a new paragraph
+		/// </summary>
+		private static void Fill(XElement oe, XNamespace ns, XElement meta, XElement content)
+		{
+			oe.Elements().Where(e => e.Name != ns + "OEChildren").Remove();
+			oe.AddFirst(meta, content);
 		}
 
 
@@ -122,6 +201,7 @@ namespace River.OneMoreAddIn.Commands
 		{
 			var runs = oe.Elements(ns + "T").ToList();
 			return runs.Count > 0 &&
+				oe.Elements(ns + "Meta").FirstOrDefault() is null &&
 				oe.Elements(ns + "Image").FirstOrDefault() is null &&
 				oe.Elements(ns + "Table").FirstOrDefault() is null &&
 				runs.All(t => string.IsNullOrWhiteSpace(t.TextValue(true)));

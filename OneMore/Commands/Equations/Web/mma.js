@@ -35,10 +35,10 @@
   Object.assign(UNI_TEX, {
     'ε': '\\varepsilon', 'ϵ': '\\epsilon', 'φ': '\\varphi', 'ϕ': '\\phi', 'ϑ': '\\vartheta', 'ϱ': '\\varrho',
     'ς': '\\varsigma', 'ϖ': '\\varpi', 'ϰ': '\\varkappa', '∂': '\\partial', '∇': '\\nabla', 'ℏ': '\\hbar',
-    'ℓ': '\\ell', 'ⅆ': '\\mathrm{d}', 'Å': '\\text{Å}', 'µ': '\\mu', '…': '\\ldots'
+    'ℓ': '\\ell', 'ⅆ': '\\mathrm{d}', 'Å': '\\text{Å}', 'µ': '\\mu', '…': '\\ldots', '□': '\\square'
   });
   Object.assign(UNI_NAME, { 'ϵ': 'epsilon', 'ϕ': 'phi', 'ϑ': 'theta', 'ϱ': 'rho', 'ς': 'sigma', 'ϖ': 'pi', 'ϰ': 'kappa',
-    '∂': 'partial', '∇': 'nabla', 'ℏ': 'hbar', 'ℓ': 'ell', 'ⅆ': 'd', 'Å': 'angstrom', 'µ': 'mu', '…': 'ellipsis' });
+    '∂': 'partial', '∇': 'nabla', 'ℏ': 'hbar', 'ℓ': 'ell', 'ⅆ': 'd', 'Å': 'angstrom', 'µ': 'mu', '…': 'ellipsis', '□': 'box' });
   Object.assign(NAMED, {
     Epsilon: 'ϵ', CurlyEpsilon: 'ε', Phi: 'ϕ', CurlyPhi: 'φ', CurlyTheta: 'ϑ', CurlyRho: 'ϱ', FinalSigma: 'ς',
     CurlyPi: 'ϖ', CurlyKappa: 'ϰ', HBar: 'ℏ', Infinity: '∞', PartialD: '∂', Del: '∇', Degree: '°', Ellipsis: '…',
@@ -56,7 +56,7 @@
   Object.keys(NAMED).forEach(k => { if (!(NAMED[k] in REV_NAMED)) REV_NAMED[NAMED[k]] = k; });
 
   const OPCHARS = '→⧴≤≥≠×⨯·÷±∓≈∝⇒⇔∧∨¬∪∩⊂⊆≡⊗∈∉';
-  const SINGLE_ID = new Set([...'∞∂∇°ℏħℓℝℂℤℕℚⅈⅇⅆÅµ…']);
+  const SINGLE_ID = new Set([...'∞∂∇°ℏħℓℝℂℤℕℚⅈⅇⅆÅµ…□']);
   const OPS = ['===', '=!=', '//.', ':=', '->', ':>', '==', '!=', '<=', '>=', '&&', '||', '/.', '//', '@@', '/@',
     '+', '-', '*', '/', '^', '=', '<', '>', '!', "'", '.', ',', ';', '&', '@', '(', ')', '{', '}', '[', ']', ...OPCHARS];
 
@@ -230,7 +230,12 @@
       if (t.t === 'id') {
         const s = S(t.v);
         if (t.pat != null) s.pat = t.pat;
-        if (t.label != null) return C('Subscript', s, { k: 'str', v: t.label });
+        if (t.label != null) {
+          const parts = t.label.split(',').map(x => x.trim());
+          if (parts.every(x => /^([ijklmn]+|[0-9]+)$/.test(x)))
+            return C('Subscript', s, ...parts.map(x => /^[0-9]/.test(x) ? Num(x) : S(x)));
+          return C('Subscript', s, { k: 'str', v: t.label.replace(/"/g, '') });
+        }
         if (t.sub != null) return C('Subscript', s, /^[0-9]/.test(t.sub) ? Num(t.sub) : S(CANON[t.sub] || t.sub));
         return s;
       }
@@ -388,6 +393,8 @@
     const chars = [...b];
     if (chars.length === 1) return UNI_TEX[b] !== undefined ? UNI_TEX[b] : b;
     if (chars.every(c => UNI_TEX[c])) return chars.map(c => UNI_TEX[c]).join(' ');
+    // a leading Greek letter followed by a name reads as a product-like prefix: ΔV, δx
+    if (UNI_TEX[chars[0]] && isGreekChar(chars[0])) return UNI_TEX[chars[0]] + ' ' + baseTeX(chars.slice(1).join(''), iso);
     return '\\mathit{' + chars.map(c => UNI_TEX[c] ? '{' + UNI_TEX[c] + '}' : (c === '$' ? '\\$' : c)).join('') + '}';
   }
   function symTeX(n, iso) {
@@ -595,7 +602,8 @@
       if (!this.iso) return subs.map(x => x.k === 'str' ? `\\text{${texEscape(x.v)}}` : this.tex(x)).join(',');
       const upright = x => x.k === 'str' ||
         (x.k === 'sym' && [...x.n].length > 1 && !GREEK_SET.has(x.n) && !VAR_GREEK.has(x.n) && !TEX_CAPS.has(x.n) &&
-          SYM_TEX[x.n] === undefined && !/[0-9]$/.test(x.n) && !/(ddot|dot|hat|bar|vec|tilde)$/.test(x.n));
+          SYM_TEX[x.n] === undefined && !/[0-9]$/.test(x.n) && !/(ddot|dot|hat|bar|vec|tilde)$/.test(x.n) &&
+          !/^[ijklmn]+$/.test(x.n));
       if (subs.every(upright)) return `\\mathrm{${subs.map(x => texEscape(x.k === 'str' ? x.v : x.n)).join(',')}}`;
       return subs.map(x => upright(x) ? `\\mathrm{${texEscape(x.k === 'str' ? x.v : x.n)}}` : this.tex(x)).join(',');
     }

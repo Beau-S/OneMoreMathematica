@@ -1716,6 +1716,9 @@
     <EmbeddedResource Include="Commands\Equations\Web\equation.html">
       <LogicalName>River.OneMoreAddIn.Equations.equation.html</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="Commands\Equations\Web\keys.js">
+      <LogicalName>River.OneMoreAddIn.Equations.keys.js</LogicalName>
+    </EmbeddedResource>
     <EmbeddedResource Include="Commands\Equations\Web\mma.js">
       <LogicalName>River.OneMoreAddIn.Equations.mma.js</LogicalName>
     </EmbeddedResource>

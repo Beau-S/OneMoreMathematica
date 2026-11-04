@@ -8,11 +8,14 @@ namespace River.OneMoreAddIn.Commands
 	using Microsoft.Web.WebView2.WinForms;
 	using Newtonsoft.Json;
 	using Newtonsoft.Json.Linq;
+	using River.OneMoreAddIn.Models;
 	using River.OneMoreAddIn.UI;
 	using System;
+	using System.Diagnostics;
 	using System.Drawing;
 	using System.IO;
 	using System.Reflection;
+	using System.Threading;
 	using System.Windows.Forms;
 	using Resx = Properties.Resources;
 
@@ -46,34 +49,44 @@ namespace River.OneMoreAddIn.Commands
 
 
 	/// <summary>
-	/// Hosts the Mathematica equation editor (Commands/Equations/Web) in a WebView2.
-	/// The page posts a JSON message with action "insert" or "cancel".
+	/// A modeless side panel hosting the Mathematica equation editor (Commands/Equations/Web)
+	/// in a WebView2. It runs on its own STA thread so OneNote stays fully usable while it is
+	/// open; each Insert reads the page at that moment and inserts at OneNote's cursor.
 	/// </summary>
 	internal class EquationDialog : MoreForm
 	{
 		private const string HostName = "equation.onemore.local";
+		private const int PanelWidth = 470;
+
+		private static readonly object Gate = new();
+		private static EquationDialog current;
+		private static bool opening;
 
 		private readonly WebView2 webView;
+		private readonly System.Windows.Forms.Timer topTimer;
 		private readonly string initJson;
+		private readonly uint ownPid;
+		private uint oneNotePid;
+		private bool ready;
+		private bool busy;
+
+		// objectID of the paragraph holding the equation being edited, or null for new
+		private string editingId;
 
 
-		public EquationDialog(JObject init)
+		private EquationDialog(JObject init, string editingId)
 		{
 			initJson = init.ToString(Formatting.None);
+			this.editingId = editingId;
 
 			Text = "Equation";
-			Size = new Size(980, 640);
-			MinimumSize = new Size(560, 420);
-			StartPosition = FormStartPosition.CenterParent;
-			MinimizeBox = false;
-			MaximizeBox = true;
+			MinimumSize = new Size(360, 380);
+			FormBorderStyle = FormBorderStyle.SizableToolWindow;
 			ShowInTaskbar = false;
 			ShowIcon = false;
-			KeyPreview = true;
+			RememberSize = true;
 
-			// the add-in runs in a COM surrogate process, which Windows won't let take the
-			// foreground from OneNote; TopMost keeps the editor from opening behind OneNote
-			TopMost = true;
+			ownPid = (uint)Process.GetCurrentProcess().Id;
 
 			webView = new WebView2
 			{
@@ -84,24 +97,109 @@ namespace River.OneMoreAddIn.Commands
 			};
 
 			Controls.Add(webView);
+
+			// keep the panel above OneNote while OneNote (or this panel) is in front, but let
+			// it sink behind other applications
+			topTimer = new System.Windows.Forms.Timer { Interval = 300 };
+			topTimer.Tick += TrackOneNote;
 		}
 
 
 		/// <summary>
-		/// Gets the equation to insert, or null if the user cancelled
+		/// Opens the panel, or brings the open panel forward and loads the given equation.
 		/// </summary>
-		public EquationResult Result { get; private set; }
+		/// <param name="init">Editor startup options</param>
+		/// <param name="selected">The equation under OneNote's cursor, if any</param>
+		/// <param name="bounds">The OneNote main window bounds</param>
+		public static void Present(JObject init, SelectedEquation selected, Rectangle bounds)
+		{
+			lock (Gate)
+			{
+				if (current is not null && !current.IsDisposed)
+				{
+					var panel = current;
+					panel.BeginInvoke(new Action(() => panel.Bring(selected)));
+					return;
+				}
+
+				if (opening)
+				{
+					return;
+				}
+
+				opening = true;
+			}
+
+			if (selected is not null)
+			{
+				init["source"] = selected.Source;
+				init["editing"] = true;
+			}
+
+			var thread = new Thread(() =>
+			{
+				EquationDialog panel = null;
+				try
+				{
+					panel = new EquationDialog(init, selected?.ObjectId);
+					panel.FormClosed += (s, e) =>
+					{
+						lock (Gate)
+						{
+							if (current == panel) current = null;
+						}
+					};
+
+					lock (Gate)
+					{
+						current = panel;
+						opening = false;
+					}
+
+					panel.Height = Math.Max(panel.MinimumSize.Height, Math.Min(760, bounds.Height - 160));
+					panel.Width = PanelWidth;
+
+					var location = new Point(
+						Math.Max(bounds.Left, bounds.Right - panel.Width - 28),
+						bounds.Top + 130);
+
+					// blocks this thread's message loop until the panel closes
+					panel.RunModeless(location);
+				}
+				catch (Exception exc)
+				{
+					Logger.Current.WriteLine("error running equation panel", exc);
+				}
+				finally
+				{
+					lock (Gate)
+					{
+						opening = false;
+						if (current == panel) current = null;
+					}
+				}
+			})
+			{
+				IsBackground = true,
+				Name = "EquationPanel"
+			};
+
+			thread.SetApartmentState(ApartmentState.STA);
+			thread.Start();
+		}
 
 
 		protected override async void OnLoad(EventArgs e)
 		{
 			base.OnLoad(e);
 
-			// OneMore's global hotkeys must not swallow keys typed into the editor
-			HotkeyManager.Suspend();
-
 			try
 			{
+				using (var one = new OneNote())
+				{
+					Native.GetWindowThreadProcessId(one.WindowHandle, out oneNotePid);
+				}
+
 				var folder = EnsureAssets();
 
 				var env = await CoreWebView2Environment.CreateAsync(null,
@@ -112,17 +210,20 @@ namespace River.OneMoreAddIn.Commands
 				var core = webView.CoreWebView2;
 				core.Settings.AreDevToolsEnabled = false;
 				core.Settings.IsStatusBarEnabled = false;
+				core.Settings.IsZoomControlEnabled = false;
 				core.Settings.AreBrowserAcceleratorKeysEnabled = false;
 
 				core.SetVirtualHostNameToFolderMapping(
 					HostName, folder, CoreWebView2HostResourceAccessKind.Allow);
 
 				core.WebMessageReceived += ReceiveMessage;
+				core.NavigationCompleted += (s, a) => ready = a.IsSuccess;
 
 				await core.AddScriptToExecuteOnDocumentCreatedAsync(
 					$"window.__eqInit = {initJson};");
 
 				core.Navigate($"https://{HostName}/equation.html");
+				topTimer.Start();
 			}
 			catch (Exception exc)
 			{
@@ -132,7 +233,6 @@ namespace River.OneMoreAddIn.Commands
 					"may be missing.\n\n" + exc.Message,
 					Resx.ProgramName, MessageBoxButtons.OK, MessageBoxIcon.Error);
 
-				DialogResult = DialogResult.Cancel;
 				Close();
 			}
 		}
@@ -141,19 +241,88 @@ namespace River.OneMoreAddIn.Commands
 		protected override void OnShown(EventArgs e)
 		{
 			base.OnShown(e);
-			Activate();
+			TopMost = true;
+			Elevate();
 			webView.Focus();
 		}
 
 
 		protected override void OnFormClosed(FormClosedEventArgs e)
 		{
-			HotkeyManager.Resume();
+			topTimer.Stop();
+			topTimer.Dispose();
 			base.OnFormClosed(e);
 		}
 
 
-		private void ReceiveMessage(object sender, CoreWebView2WebMessageReceivedEventArgs e)
+		private void Bring(SelectedEquation selected)
+		{
+			if (IsDisposed)
+			{
+				return;
+			}
+
+			if (selected is not null)
+			{
+				Load(selected);
+			}
+
+			if (WindowState == FormWindowState.Minimized)
+			{
+				WindowState = FormWindowState.Normal;
+			}
+
+			TopMost = true;
+			Elevate();
+			webView.Focus();
+			Post(new JObject { ["action"] = "focus" });
+		}
+
+
+		private void Load(SelectedEquation selected)
+		{
+			editingId = selected.ObjectId;
+			Post(new JObject
+			{
+				["action"] = "loaded",
+				["source"] = selected.Source
+			});
+		}
+
+
+		private void TrackOneNote(object sender, EventArgs e)
+		{
+			var foreground = Native.GetForegroundWindow();
+			if (foreground == IntPtr.Zero)
+			{
+				return;
+			}
+
+			Native.GetWindowThreadProcessId(foreground, out var pid);
+			var keep = pid == ownPid || (oneNotePid != 0 && pid == oneNotePid);
+			if (TopMost != keep)
+			{
+				TopMost = keep;
+			}
+		}
+
+
+		private void Post(JObject message)
+		{
+			if (ready && webView.CoreWebView2 is not null)
+			{
+				webView.CoreWebView2.PostWebMessageAsString(message.ToString(Formatting.None));
+			}
+		}
+
+
+		private void PostError(string message)
+		{
+			Post(new JObject { ["action"] = "error", ["message"] = message });
+		}
+
+
+		private async void ReceiveMessage(object sender, CoreWebView2WebMessageReceivedEventArgs e)
 		{
 			JObject message;
 			try
@@ -166,10 +335,38 @@ namespace River.OneMoreAddIn.Commands
 				return;
 			}
 
-			var action = message.Value<string>("action");
-			if (action == "insert")
+			switch (message.Value<string>("action"))
 			{
-				Result = new EquationResult
+				case "insert":
+					await Insert(message);
+					break;
+
+				case "load":
+					await LoadSelected();
+					break;
+
+				case "new":
+					editingId = null;
+					break;
+
+				case "close":
+					Close();
+					break;
+			}
+		}
+
+
+		private async System.Threading.Tasks.Task Insert(JObject message)
+		{
+			if (busy)
+			{
+				return;
+			}
+
+			busy = true;
+			try
+			{
+				var result = new EquationResult
 				{
 					Mode = message.Value<string>("mode"),
 					Source = message.Value<string>("source"),
@@ -180,13 +377,70 @@ namespace River.OneMoreAddIn.Commands
 					Height = message.Value<double?>("height") ?? 0
 				};
 
-				DialogResult = DialogResult.OK;
-				Close();
+				await using var one = new OneNote(out var page, out var ns);
+				if (page is null)
+				{
+					PostError("Open a OneNote page first.");
+					return;
+				}
+
+				PageNamespace.Set(ns);
+
+				var outcome = EquationCommand.Apply(page, ns, result, editingId);
+				switch (outcome)
+				{
+					case EquationOutcome.NoAnchor:
+						PostError("Click into a paragraph on the page, then insert again.");
+						return;
+
+					case EquationOutcome.Empty:
+						PostError("Nothing to insert.");
+						return;
+				}
+
+				await one.Update(page);
+
+				if (outcome != EquationOutcome.Replaced)
+				{
+					editingId = null;
+				}
+
+				Post(new JObject
+				{
+					["action"] = "inserted",
+					["replaced"] = outcome == EquationOutcome.Replaced
+				});
 			}
-			else if (action == "cancel")
+			catch (Exception exc)
 			{
-				DialogResult = DialogResult.Cancel;
-				Close();
+				logger.WriteLine("error inserting equation", exc);
+				PostError("Insert failed: " + exc.Message);
+			}
+			finally
+			{
+				busy = false;
+			}
+		}
+
+
+		private async System.Threading.Tasks.Task LoadSelected()
+		{
+			try
+			{
+				await using var one = new OneNote(out var page, out var ns);
+				var selected = page is null ? null : EquationCommand.ReadSelected(page, ns);
+				if (selected is null)
+				{
+					PostError("Put OneNote's cursor on an equation inserted by this editor, then try again.");
+					return;
+				}
+
+				Load(selected);
+			}
+			catch (Exception exc)
+			{
+				logger.WriteLine("error reading selected equation", exc);
+				PostError("Could not read the page: " + exc.Message);
 			}
 		}
 
