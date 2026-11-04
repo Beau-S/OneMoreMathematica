@@ -71,6 +71,10 @@ namespace River.OneMoreAddIn.Commands
 			ShowIcon = false;
 			KeyPreview = true;
 
+			// the add-in runs in a COM surrogate process, which Windows won't let take the
+			// foreground from OneNote; TopMost keeps the editor from opening behind OneNote
+			TopMost = true;
+
 			webView = new WebView2
 			{
 				Dock = DockStyle.Fill,
@@ -131,6 +135,14 @@ namespace River.OneMoreAddIn.Commands
 				DialogResult = DialogResult.Cancel;
 				Close();
 			}
+		}
+
+
+		protected override void OnShown(EventArgs e)
+		{
+			base.OnShown(e);
+			Activate();
+			webView.Focus();
 		}
 
 
