@@ -90,6 +90,8 @@ kbd { font: 11px var(--font-code); border: 1px solid var(--rule); border-radius:
     <details>
       <summary>Display</summary>
       <div class="settings">
+        <label for="optNotation">Notation</label>
+        <select id="optNotation"><option value="iso">ISO 80000-2</option><option value="classic">Classic</option></select>
         <label for="optMult">Multiplication</label>
         <select id="optMult"><option value="space">a b</option><option value="cdot">a · b</option><option value="times">a × b</option></select>
         <label for="optFrac">Division</label>
@@ -154,7 +156,7 @@ window.MathJax = {
   ];
 
   const src = $('src'), preview = $('preview'), code = $('code');
-  const opts = Object.assign({ mult: 'space', frac: 'frac', deriv: 'auto', diff: 'roman', matrix: 'pmatrix', bg: init.theme === 'dark' },
+  const opts = Object.assign({ notation: 'iso', mult: 'space', frac: 'frac', deriv: 'auto', diff: 'roman', matrix: 'pmatrix', bg: init.theme === 'dark' },
     store.get('opts', {}), { size: init.size, color: init.color });
   let tab = store.get('tab', 'tex');
   let result = null;
@@ -192,7 +194,7 @@ window.MathJax = {
       const { size, color, ...persist } = opts; store.set('opts', persist); update();
     });
   };
-  bind('optMult', 'mult'); bind('optFrac', 'frac'); bind('optDeriv', 'deriv'); bind('optDiff', 'diff'); bind('optMatrix', 'matrix');
+  bind('optNotation', 'notation'); bind('optMult', 'mult'); bind('optFrac', 'frac'); bind('optDeriv', 'deriv'); bind('optDiff', 'diff'); bind('optMatrix', 'matrix');
   bind('optSize', 'size'); bind('optColor', 'color'); bind('optBg', 'bg', 'checked');
 
   // ---- conversion

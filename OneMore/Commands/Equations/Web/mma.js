@@ -95,9 +95,15 @@
         let j = i + 1;
         if (!SINGLE_ID.has(c)) while (j < src.length && isIdPart(src[j])) j++;
         let name = src.slice(i, j);
-        let pat = null, sub = null;
+        let pat = null, sub = null, label = null;
         const subm = src[j] === '_' ? /^_([0-9]+|[a-z\u0370-\u03FF][A-Za-z0-9\u0370-\u03FF]*)/.exec(src.slice(j)) : null;
-        if (subm) { sub = subm[1]; j += subm[0].length; }
+        if (src[j] === '_' && src[j + 1] === '{') {
+          const close = src.indexOf('}', j);
+          if (close < 0) throw new MmaError('Missing "}" in subscript label', j);
+          label = src.slice(j + 2, close).trim();
+          j = close + 1;
+        }
+        else if (subm) { sub = subm[1]; j += subm[0].length; }
         else if (src[j] === '_') {
           let k = j + 1;
           while (src[k] === '_') k++;
@@ -106,7 +112,7 @@
           pat = src.slice(j, k); j = k;
         }
         name = CANON[name] || name;
-        toks.push({ t: 'id', v: name, pat, sub, sp, pos: start });
+        toks.push({ t: 'id', v: name, pat, sub, label, sp, pos: start });
         i = j;
       } else if (c === '#') {
         let j = i + 1;
@@ -224,6 +230,7 @@
       if (t.t === 'id') {
         const s = S(t.v);
         if (t.pat != null) s.pat = t.pat;
+        if (t.label != null) return C('Subscript', s, { k: 'str', v: t.label });
         if (t.sub != null) return C('Subscript', s, /^[0-9]/.test(t.sub) ? Num(t.sub) : S(CANON[t.sub] || t.sub));
         return s;
       }
@@ -369,9 +376,12 @@
   function isSimpleBase(b) {
     return [...b].length === 1 || GREEK_SET.has(b) || TEX_CAPS.has(b);
   }
-  function baseTeX(b) {
+  function baseTeX(b, iso) {
     const acc = /^(.+?)(ddot|dot|hat|bar|vec|tilde)$/.exec(b);
-    if (acc && isSimpleBase(acc[1])) return `\\${acc[2]}{${baseTeX(acc[1])}}`;
+    if (acc && isSimpleBase(acc[1])) {
+      if (iso && acc[2] === 'vec') return `\\boldsymbol{${baseTeX(acc[1], iso)}}`;
+      return `\\${acc[2]}{${baseTeX(acc[1], iso)}}`;
+    }
     if (GREEK_SET.has(b) || VAR_GREEK.has(b)) return b === 'omicron' ? 'o' : '\\' + b;
     if (TEX_CAPS.has(b)) return '\\' + b;
     if (SYM_TEX[b] !== undefined) return SYM_TEX[b];
@@ -380,19 +390,22 @@
     if (chars.every(c => UNI_TEX[c])) return chars.map(c => UNI_TEX[c]).join(' ');
     return '\\mathit{' + chars.map(c => UNI_TEX[c] ? '{' + UNI_TEX[c] + '}' : (c === '$' ? '\\$' : c)).join('') + '}';
   }
-  function symTeX(n) {
+  function symTeX(n, iso) {
+    if (iso && (n === 'E' || n === 'I')) return n === 'E' ? '\\mathrm{e}' : '\\mathrm{i}';
     if (SYM_TEX[n] !== undefined) return SYM_TEX[n];
     if (n[0] === '#') return '\\#' + n.slice(1);
     const m = /^(.*?[^0-9])([0-9]+)$/.exec(n);
-    if (m) return baseTeX(m[1]) + '_{' + m[2] + '}';
-    return baseTeX(n);
+    if (m) return baseTeX(m[1], iso) + '_{' + m[2] + '}';
+    return baseTeX(n, iso);
   }
 
-  const TEX_DEFAULTS = { mult: 'space', frac: 'frac', deriv: 'auto', diff: 'roman', matrix: 'pmatrix' };
+  const TEX_DEFAULTS = { mult: 'space', frac: 'frac', deriv: 'auto', diff: 'roman', matrix: 'pmatrix', notation: 'iso' };
 
   class TeX {
     constructor(opts) { this.o = Object.assign({}, TEX_DEFAULTS, opts || {}); }
     get D() { return this.o.diff === 'italic' ? 'd' : '\\mathrm{d}'; }
+    get iso() { return this.o.notation !== 'classic'; }
+    get eTeX() { return this.iso ? '\\mathrm{e}' : 'e'; }
 
     prec(n) {
       if (n.k === 'num') return isNegNum(n) ? 480 : (n.e ? 400 : 1000);
@@ -437,7 +450,7 @@
       if (SYM_TEX[name] !== undefined) return SYM_TEX[name];
       const first = name[0];
       if ([...name].length === 1 || GREEK_SET.has(name) || TEX_CAPS.has(name) || /^[a-z]/.test(first) ||
-          isGreekChar(first) || /\d$/.test(name)) return symTeX(name);
+          isGreekChar(first) || /\d$/.test(name)) return symTeX(name, this.iso);
       return `\\operatorname{${name}}`;
     }
     opApply(h, args, forceParen) {
@@ -449,7 +462,7 @@
     raw(n, ctx = {}) {
       if (!n) return '';
       if (n.k === 'num') return n.e ? `${n.v} \\times 10^{${n.e}}` : n.v;
-      if (n.k === 'sym') return symTeX(n.n);
+      if (n.k === 'sym') return symTeX(n.n, this.iso);
       if (n.k === 'str') return `\\text{${texEscape(n.v)}}`;
       // head is itself an expression
       if (n.h.k !== 'sym') {
@@ -535,7 +548,7 @@
       if (a.length !== 2) return null;
       const [b, e] = a, hb = head(b);
       if (isHalf(e)) return `\\sqrt{${this.tex(b)}}`;
-      if (b.k === 'sym' && b.n === 'E') return `e^{${this.tex(e)}}`;
+      if (b.k === 'sym' && b.n === 'E') return `${this.eTeX}^{${this.tex(e)}}`;
       if (hb && PAREN_OPT.has(hb) && b.a.length === 1 && ((e.k === 'num' && !isNegNum(e)) || e.k === 'sym')) {
         const arg = b.a[0];
         const op = OPNAME[hb];
@@ -550,7 +563,7 @@
     f_Sqrt(a) { return a.length === 1 ? `\\sqrt{${this.tex(a[0])}}` : null; }
     f_CubeRoot(a) { return `\\sqrt[3]{${this.tex(a[0])}}`; }
     f_Surd(a) { return a.length === 2 ? `\\sqrt[${this.tex(a[1])}]{${this.tex(a[0])}}` : null; }
-    f_Exp(a) { return a.length === 1 ? `e^{${this.tex(a[0])}}` : null; }
+    f_Exp(a) { return a.length === 1 ? `${this.eTeX}^{${this.tex(a[0])}}` : null; }
     f_Log(a) {
       if (a.length !== 2) return null;
       const [b, x] = a;
@@ -572,11 +585,20 @@
     // ---- postfix decorations
     post(a, s) { return this.scriptBase(a[0]) + s; }
     f_Conjugate(a) { return this.post(a, '^{*}'); }
-    f_Transpose(a) { return this.post(a, '^{\\mathsf{T}}'); }
+    f_Transpose(a) { return this.post(a, this.iso ? '^{\\mathrm{T}}' : '^{\\mathsf{T}}'); }
     f_ConjugateTranspose(a) { return this.post(a, '^{\\dagger}'); }
     f_Dagger(a) { return this.post(a, '^{\\dagger}'); }
     f_Inverse(a) { return this.post(a, '^{-1}'); }
-    f_Subscript(a) { return `${this.scriptBase(a[0])}_{${a.slice(1).map(x => this.tex(x)).join(',')}}`; }
+    f_Subscript(a) { return `${this.scriptBase(a[0])}_{${this.subscripts(a.slice(1))}}`; }
+    // ISO 80000-2: running indices and quantities are italic; descriptive labels are upright
+    subscripts(subs) {
+      if (!this.iso) return subs.map(x => x.k === 'str' ? `\\text{${texEscape(x.v)}}` : this.tex(x)).join(',');
+      const upright = x => x.k === 'str' ||
+        (x.k === 'sym' && [...x.n].length > 1 && !GREEK_SET.has(x.n) && !VAR_GREEK.has(x.n) && !TEX_CAPS.has(x.n) &&
+          SYM_TEX[x.n] === undefined && !/[0-9]$/.test(x.n) && !/(ddot|dot|hat|bar|vec|tilde)$/.test(x.n));
+      if (subs.every(upright)) return `\\mathrm{${subs.map(x => texEscape(x.k === 'str' ? x.v : x.n)).join(',')}}`;
+      return subs.map(x => upright(x) ? `\\mathrm{${texEscape(x.k === 'str' ? x.v : x.n)}}` : this.tex(x)).join(',');
+    }
     f_Superscript(a) { return `${this.scriptBase(a[0])}^{${this.tex(a[1])}}`; }
     f_Subsuperscript(a) { return `${this.scriptBase(a[0])}_{${this.tex(a[1])}}^{${this.tex(a[2])}}`; }
     f_Part(a) { return `${this.scriptBase(a[0])}_{${a.slice(1).map(x => this.tex(x)).join(',')}}`; }
@@ -589,8 +611,11 @@
     f_Hat(a) { return this.accent(a, 'hat', 'widehat'); }
     f_OverBar(a) { return this.accent(a, 'bar', 'overline'); }
     f_Bar(a) { return this.accent(a, 'bar', 'overline'); }
-    f_OverVector(a) { return this.accent(a, 'vec', 'overrightarrow'); }
-    f_Vec(a) { return this.accent(a, 'vec', 'overrightarrow'); }
+    f_OverVector(a) { return this.iso ? `\\boldsymbol{${this.tex(a[0])}}` : this.accent(a, 'vec', 'overrightarrow'); }
+    f_Vec(a) { return this.f_OverVector(a); }
+    f_Log10(a) { return this.iso && a.length === 1 ? this.namedOp('\\lg', a[0]) : null; }
+    f_Log2(a) { return this.iso && a.length === 1 ? this.namedOp('\\operatorname{lb}', a[0]) : null; }
+    namedOp(op, x) { return this.simpleArg(x) ? `${op} ${this.tex(x)}` : op + this.argList([x]); }
     f_OverTilde(a) { return this.accent(a, 'tilde', 'widetilde'); }
     f_UnderBar(a) { return `\\underline{${this.tex(a[0])}}`; }
     f_OverDot(a) {
@@ -871,8 +896,11 @@
       const k = h === 'OverDot' && n.a[1] && isInt(n.a[1]) && n.a[1].v === '2' ? 'ddot' : acc[h];
       return n.a[0].n + k;
     }
-    if (h === 'Subscript' && n.a.length >= 2 && n.a.every(x => x.k === 'sym' || (isInt(x) && !isNegNum(x)))) {
-      return n.a[0].n + '_' + n.a.slice(1).map(x => x.k === 'sym' ? x.n : x.v).join('');
+    if (h === 'Subscript' && n.a.length >= 2 && n.a[0].k === 'sym' &&
+        n.a.slice(1).every(x => x.k === 'sym' || x.k === 'str' || (isInt(x) && !isNegNum(x)))) {
+      const parts = n.a.slice(1).map(x => x.k === 'str' ? x.v.split(/[^A-Za-z0-9\u0370-\u03FF]+/).filter(Boolean).join('_') : (x.k === 'sym' ? x.n : x.v));
+      const sep = n.a.slice(1).some(x => x.k === 'str') ? '_' : '';
+      return n.a[0].n + '_' + parts.join(sep);
     }
     return null;
   }
