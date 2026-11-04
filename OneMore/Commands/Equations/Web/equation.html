@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Equation</title>
+<style>
+/* OneMore Insert Equation editor. Hosted in WebView2 by EquationDialog; works offline. */
+:root {
+  --paper: #f7f8fa; --cell: #ffffff; --ink: #18212b; --muted: #5d6b7a; --rule: #d6dde4;
+  --accent: #1d5fa8; --accent-ink: #ffffff; --accent-soft: #e6eef8; --warn: #a33a1f; --code-bg: #f1f4f7;
+  --font-ui: "Segoe UI", system-ui, sans-serif;
+  --font-code: "Cascadia Mono", "Cascadia Code", Consolas, monospace;
+  --font-math: "Cambria Math", "Segoe UI Symbol", serif;
+}
+:root[data-theme="dark"] {
+  --paper: #1f1f1f; --cell: #2a2a2a; --ink: #e6e6e6; --muted: #a0a0a0; --rule: #3c3c3c;
+  --accent: #79aeea; --accent-ink: #10202f; --accent-soft: #2b3746; --warn: #f08a6c; --code-bg: #242424;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--paper); color: var(--ink); font: 13px/1.45 var(--font-ui); display: flex; flex-direction: column; }
+main { flex: 1; overflow: auto; padding: 12px 14px; display: grid; gap: 12px; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); align-items: start; }
+@media (max-width: 720px) { main { grid-template-columns: minmax(0, 1fr); } }
+.col { display: grid; gap: 10px; min-width: 0; }
+.col > * { min-width: 0; }
+.incell { position: relative; background: var(--cell); border: 1px solid var(--rule); border-radius: 3px; }
+.incell:focus-within { border-color: var(--accent); }
+.incell::after { content: ""; position: absolute; top: 6px; bottom: 6px; right: 5px; width: 4px; border: 1px solid var(--rule); border-left: 0; }
+textarea#src { display: block; width: 100%; min-height: 92px; resize: vertical; border: 0; outline: 0; background: transparent;
+  color: var(--ink); font: 13.5px/1.5 var(--font-code); padding: 9px 18px 9px 11px; }
+.cellbar { display: flex; justify-content: space-between; gap: 8px; padding: 0 11px 6px; font-size: 11.5px; color: var(--muted); min-height: 20px; }
+.err { color: var(--warn); font-family: var(--font-code); }
+.chips { display: flex; flex-wrap: wrap; gap: 3px; }
+.chip { font: 12px var(--font-code); padding: 2px 7px; border: 1px solid var(--rule); background: var(--cell); color: var(--ink); border-radius: 3px; cursor: pointer; }
+.chip.gk { font-family: var(--font-math); font-size: 14px; padding: 0 7px; }
+.chip:hover { border-color: var(--accent); color: var(--accent); }
+.preview { background: var(--cell); border: 1px solid var(--rule); border-radius: 3px; min-height: 110px; padding: 14px 12px;
+  display: flex; align-items: center; justify-content: safe center; overflow-x: auto; }
+.preview mjx-container { margin: 0 !important; flex: none; }
+mjx-assistive-mml { display: none !important; }
+.placeholder { color: var(--muted); }
+.tabs { display: flex; border-bottom: 1px solid var(--rule); overflow-x: auto; }
+.tab { font: 12.5px var(--font-ui); background: none; border: 0; border-bottom: 2px solid transparent; padding: 5px 9px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.out { position: relative; }
+pre#code { margin: 0; background: var(--code-bg); border: 1px solid var(--rule); border-top: 0; padding: 9px 64px 9px 11px;
+  font: 12px/1.55 var(--font-code); white-space: pre-wrap; overflow-wrap: anywhere; min-height: 70px; max-height: 260px; overflow-y: auto; }
+.copy { position: absolute; top: 38px; right: 6px; }
+details { border-top: 1px solid var(--rule); padding-top: 6px; }
+summary { cursor: pointer; color: var(--muted); font-weight: 600; font-size: 12px; }
+.settings { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; align-items: center; margin-top: 8px; font-size: 12.5px; }
+.settings .check { grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; }
+select, input[type="color"] { font: 12.5px var(--font-ui); color: var(--ink); background: var(--cell); border: 1px solid var(--rule); border-radius: 3px; padding: 2px 4px; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.history { list-style: none; margin: 6px 0 0; padding: 0; }
+.history button { width: 100%; text-align: left; font: 12px var(--font-code); border: 0; background: none; padding: 3px 6px; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.history button:hover { background: var(--accent-soft); }
+footer { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--rule); background: var(--cell); flex-wrap: wrap; }
+footer .grow { flex: 1; color: var(--muted); font-size: 12px; min-width: 120px; }
+button.btn { font: 600 13px var(--font-ui); border-radius: 3px; padding: 6px 14px; cursor: pointer; border: 1px solid var(--rule); background: var(--cell); color: var(--ink); }
+button.btn:hover { border-color: var(--accent); }
+button.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button.btn:disabled { opacity: .45; cursor: not-allowed; }
+button.small { font-weight: 400; font-size: 12px; padding: 2px 9px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+kbd { font: 11px var(--font-code); border: 1px solid var(--rule); border-radius: 3px; padding: 0 4px; background: var(--code-bg); }
+.toast { position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 6px 12px;
+  border-radius: 3px; opacity: 0; transition: opacity .15s; pointer-events: none; }
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<main>
+  <div class="col">
+    <div class="incell">
+      <textarea id="src" spellcheck="false" aria-label="Mathematica input"></textarea>
+      <div class="cellbar"><span id="status">In[1]:=</span><span id="err" class="err" role="status"></span></div>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="preview" id="preview"><span class="placeholder">Loading renderer…</span></div>
+  </div>
+  <div class="col">
+    <div class="out">
+      <div class="tabs" id="tabs" role="tablist"></div>
+      <pre id="code" tabindex="0"></pre>
+      <button class="btn small copy" id="copy">Copy</button>
+    </div>
+    <details>
+      <summary>Display</summary>
+      <div class="settings">
+        <label for="optMult">Multiplication</label>
+        <select id="optMult"><option value="space">a b</option><option value="cdot">a · b</option><option value="times">a × b</option></select>
+        <label for="optFrac">Division</label>
+        <select id="optFrac"><option value="frac">stacked fraction</option><option value="inline">a/b inline</option></select>
+        <label for="optDeriv">Derivatives</label>
+        <select id="optDeriv"><option value="auto">auto (d or ∂)</option><option value="partial">always ∂</option><option value="d">always d</option></select>
+        <label for="optDiff">Differential</label>
+        <select id="optDiff"><option value="roman">upright d</option><option value="italic">italic d</option></select>
+        <label for="optMatrix">Matrices</label>
+        <select id="optMatrix"><option value="pmatrix">( )</option><option value="bmatrix">[ ]</option></select>
+        <label for="optSize">Image size</label>
+        <input type="range" id="optSize" min="12" max="40" step="1">
+        <label for="optColor">Image ink</label>
+        <input type="color" id="optColor">
+        <label class="check"><input type="checkbox" id="optBg"> White image background</label>
+      </div>
+    </details>
+    <details open>
+      <summary>Recent</summary>
+      <ul class="history" id="history"></ul>
+    </details>
+  </div>
+</main>
+<footer>
+  <span class="grow" id="hint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> inserts · <kbd>Esc</kbd> cancels</span>
+  <button class="btn" id="cancel">Cancel</button>
+  <button class="btn" id="insImage">Insert image</button>
+  <button class="btn" id="insNative">Insert equation</button>
+</footer>
+<div class="toast" id="toast"></div>
+
+<script>
+window.MathJax = {
+  svg: { fontCache: 'none' },
+  startup: { typeset: false, ready() { MathJax.startup.defaultReady(); window.__mjReady && window.__mjReady(); } }
+};
+</script>
+<script src="tex-svg-full.js" async></script>
+<script src="mma.js"></script>
+<script>
+(function () {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const init = Object.assign({ source: '', mode: 'native', size: 20, color: '#000000', theme: 'light', editing: false }, window.__eqInit || {});
+  const host = window.chrome && window.chrome.webview;
+  const post = msg => host ? host.postMessage(JSON.stringify(msg)) : console.log('post', msg);
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem('eq.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem('eq.' + k, JSON.stringify(v)); } catch (e) {} }
+  };
+  document.documentElement.dataset.theme = init.theme === 'dark' ? 'dark' : 'light';
+
+  const TABS = [['tex', 'LaTeX'], ['markdown', 'For Claude'], ['mathematica', 'Mathematica'], ['sympy', 'SymPy'],
+    ['numpy', 'NumPy'], ['matlab', 'MATLAB'], ['mathml', 'MathML']];
+  const CHIPS = [
+    ['∫', 'Integrate[f, {x, a, b}]', 10, 11], ['d/dx', 'D[f, x]', 2, 3], ['∂²', 'D[f, {x, 2}]', 2, 3],
+    ['Σ', 'Sum[f, {n, 1, Infinity}]', 4, 5], ['∏', 'Product[f, {k, 1, n}]', 8, 9], ['√', 'Sqrt[x]', 5, 6],
+    ['lim', 'Limit[f, x -> 0]', 6, 7], ['a/b', '(a)/(b)', 1, 2], ['xₙ', 'x_n', 2, 3], ['ẋ', 'OverDot[x]', 8, 9],
+    ['( )', '{{a, b}, {c, d}}', 2, 3], ['|ψ⟩', 'Ket[ψ]', 4, 5], ['⟨φ|ψ⟩', 'BraKet[φ, ψ]', 7, 8], ['∇', 'Grad[f, {x, y, z}]', 5, 6],
+    ['α', 'α'], ['β', 'β'], ['γ', 'γ'], ['δ', 'δ'], ['ε', 'ε'], ['θ', 'θ'], ['λ', 'λ'], ['μ', 'μ'], ['π', 'π'],
+    ['σ', 'σ'], ['τ', 'τ'], ['φ', 'φ'], ['ψ', 'ψ'], ['ω', 'ω'], ['Δ', 'Δ'], ['Ω', 'Ω'], ['ℏ', 'ℏ'], ['∞', '∞']
+  ];
+
+  const src = $('src'), preview = $('preview'), code = $('code');
+  const opts = Object.assign({ mult: 'space', frac: 'frac', deriv: 'auto', diff: 'roman', matrix: 'pmatrix', bg: init.theme === 'dark' },
+    store.get('opts', {}), { size: init.size, color: init.color });
+  let tab = store.get('tab', 'tex');
+  let result = null;
+  let mjReady = !!(window.MathJax && MathJax.tex2svg);
+
+  // ---- setup
+  src.value = init.source || '';
+  if (init.editing) $('hint').innerHTML = 'Editing an existing equation · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> replaces it';
+  const primary = init.mode === 'image' ? $('insImage') : $('insNative');
+  primary.classList.add('primary');
+  // keep the default button last (rightmost)
+  primary.parentNode.appendChild(primary);
+
+  CHIPS.forEach(([label, text, a, b]) => {
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'chip' + (text.length === 1 ? ' gk' : ''); btn.textContent = label; btn.title = text;
+    btn.addEventListener('click', () => {
+      const s = src.selectionStart, e = src.selectionEnd;
+      src.setRangeText(text, s, e, 'end');
+      if (a != null) src.setSelectionRange(s + a, s + b);
+      src.focus(); update();
+    });
+    $('chips').appendChild(btn);
+  });
+  TABS.forEach(([k, label]) => {
+    const t = document.createElement('button');
+    t.type = 'button'; t.className = 'tab'; t.dataset.k = k; t.textContent = label; t.setAttribute('role', 'tab');
+    t.addEventListener('click', () => { tab = k; store.set('tab', k); showOutput(); });
+    $('tabs').appendChild(t);
+  });
+  const bind = (id, key, prop = 'value') => {
+    const el = $(id); el[prop] = opts[key];
+    el.addEventListener('input', () => {
+      opts[key] = prop === 'checked' ? el.checked : (el.type === 'range' ? +el.value : el.value);
+      const { size, color, ...persist } = opts; store.set('opts', persist); update();
+    });
+  };
+  bind('optMult', 'mult'); bind('optFrac', 'frac'); bind('optDeriv', 'deriv'); bind('optDiff', 'diff'); bind('optMatrix', 'matrix');
+  bind('optSize', 'size'); bind('optColor', 'color'); bind('optBg', 'bg', 'checked');
+
+  // ---- conversion
+  let timer = null;
+  src.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(update, 120); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      const mode = e.shiftKey ? (init.mode === 'image' ? 'native' : 'image') : init.mode;
+      insert(mode);
+    } else if (e.key === 'Escape') { e.preventDefault(); post({ action: 'cancel' }); }
+  });
+
+  function update() {
+    $('err').textContent = '';
+    if (!src.value.trim()) {
+      result = null; preview.innerHTML = '<span class="placeholder">Type Mathematica input, e.g. Integrate[Exp[-x^2], {x, -Infinity, Infinity}]</span>';
+      showOutput(); setButtons(); return;
+    }
+    try { result = MMA.convert(src.value, opts); $('status').textContent = 'In[1]:='; }
+    catch (e) {
+      result = null; $('status').textContent = '';
+      $('err').textContent = e.message + (e.pos >= 0 ? `  (col ${e.pos + 1})` : '');
+      setButtons(); return;
+    }
+    renderPreview(); showOutput(); setButtons();
+  }
+  function setButtons() { const ok = !!result && mjReady; $('insImage').disabled = !ok; $('insNative').disabled = !ok; }
+  function renderPreview() {
+    if (!result || !mjReady) return;
+    try { preview.replaceChildren(MathJax.tex2svg(result.tex, { display: true })); }
+    catch (e) { preview.textContent = 'Render error: ' + e.message; }
+  }
+  function outputText() {
+    if (!result) return '';
+    if (tab === 'mathml') { if (!mjReady) return 'Loading…'; try { return MathJax.tex2mml(result.tex, { display: true }); } catch (e) { return e.message; } }
+    return result[tab] || '';
+  }
+  function showOutput() {
+    [...$('tabs').children].forEach(t => t.setAttribute('aria-selected', String(t.dataset.k === tab)));
+    code.textContent = outputText();
+  }
+
+  // ---- MathML for OneNote: mml-prefixed, MathJax bookkeeping attributes removed
+  const escXml = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  function oneNoteMathML(tex) {
+    const xml = MathJax.tex2mml(tex, { display: true });
+    const doc = new DOMParser().parseFromString(xml, 'application/xml');
+    if (doc.getElementsByTagName('parsererror').length) throw new Error('MathML conversion failed');
+    const out = [];
+    (function walk(n) {
+      if (n.nodeType === 3) { if (n.nodeValue.trim()) out.push(escXml(n.nodeValue.trim())); return; }
+      if (n.nodeType !== 1) return;
+      const name = n.localName;
+      let attrs = name === 'math'
+        ? ' xmlns:mml="http://www.w3.org/1998/Math/MathML" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"'
+        : '';
+      for (const a of n.attributes) {
+        if (/^(data-|class$|xmlns|display$|id$)/.test(a.name)) continue;
+        attrs += ` ${a.name}="${escXml(a.value)}"`;
+      }
+      out.push(`<mml:${name}${attrs}>`);
+      n.childNodes.forEach(walk);
+      out.push(`</mml:${name}>`);
+    })(doc.documentElement);
+    return out.join('');
+  }
+
+  // ---- PNG
+  async function renderPNG() {
+    const scale = 3, fontPx = opts.size;
+    const svg = MathJax.tex2svg(result.tex, { display: true }).querySelector('svg');
+    const ex = fontPx * 0.431;
+    const w = Math.ceil(parseFloat(svg.getAttribute('width')) * ex);
+    const h = Math.ceil(parseFloat(svg.getAttribute('height')) * ex);
+    const pad = Math.round(fontPx * 0.25);
+    svg.setAttribute('width', w); svg.setAttribute('height', h); svg.removeAttribute('style');
+    const img = new Image();
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(svg).replace(/currentColor/g, opts.color));
+    await img.decode();
+    const W = w + 2 * pad, H = h + 2 * pad;
+    const cv = document.createElement('canvas');
+    cv.width = W * scale; cv.height = H * scale;
+    const g = cv.getContext('2d'); g.scale(scale, scale);
+    if (opts.bg) { g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H); }
+    g.drawImage(img, pad, pad, w, h);
+    const url = cv.toDataURL('image/png');
+    return { png: url.slice(url.indexOf(',') + 1), width: W, height: H, canvas: cv };
+  }
+
+  async function insert(mode) {
+    if (!result || !mjReady) return;
+    try {
+      const msg = { action: 'insert', mode, source: src.value.trim(), tex: result.tex, mathematica: result.mathematica };
+      if (mode === 'image') Object.assign(msg, await renderPNG());
+      else msg.mathml = oneNoteMathML(result.tex);
+      delete msg.canvas;
+      remember();
+      post(msg);
+    } catch (e) { toast('Could not prepare the equation: ' + e.message); }
+  }
+
+  // ---- copy + history
+  $('copy').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(code.textContent); toast('Copied ' + TABS.find(t => t[0] === tab)[1]); }
+    catch (e) { toast('Copy failed'); }
+  });
+  function remember() {
+    const v = src.value.trim(); if (!v) return;
+    const h = store.get('history', []).filter(x => x !== v); h.unshift(v); store.set('history', h.slice(0, 15));
+  }
+  function drawHistory() {
+    const ul = $('history'); ul.replaceChildren();
+    const h = store.get('history', []);
+    if (!h.length) { const li = document.createElement('li'); li.className = 'placeholder'; li.textContent = 'Inserted equations show up here.'; ul.appendChild(li); return; }
+    h.forEach(v => {
+      const li = document.createElement('li'), b = document.createElement('button');
+      b.type = 'button'; b.textContent = v; b.title = v;
+      b.addEventListener('click', () => { src.value = v; update(); src.focus(); });
+      li.appendChild(b); ul.appendChild(li);
+    });
+  }
+  let tt;
+  function toast(m) { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 2200); }
+
+  $('insNative').addEventListener('click', () => insert('native'));
+  $('insImage').addEventListener('click', () => insert('image'));
+  $('cancel').addEventListener('click', () => post({ action: 'cancel' }));
+
+  window.__mjReady = () => { mjReady = true; renderPreview(); showOutput(); setButtons(); };
+  if (mjReady) window.__mjReady();
+  drawHistory(); update();
+  src.focus(); src.setSelectionRange(src.value.length, src.value.length);
+})();
+</script>
+</body>
+</html>

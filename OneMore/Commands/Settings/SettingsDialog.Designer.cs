@@ -49,6 +49,7 @@
 			this.keyboardLink = new River.OneMoreAddIn.UI.MoreLinkLabel();
 			this.markdownLink = new River.OneMoreAddIn.UI.MoreLinkLabel();
 			this.navigatorLink = new River.OneMoreAddIn.UI.MoreLinkLabel();
+			this.equationsLink = new River.OneMoreAddIn.UI.MoreLinkLabel();
 			this.pageLink = new River.OneMoreAddIn.UI.MoreLinkLabel();
 			this.pluginsLink = new River.OneMoreAddIn.UI.MoreLinkLabel();
 			this.quickNotesLink = new River.OneMoreAddIn.UI.MoreLinkLabel();
@@ -174,6 +175,7 @@
 			this.navPanel.Controls.Add(this.snippetsLink);
 			this.navPanel.Controls.Add(this.tableThemesLink);
 			this.navPanel.Controls.Add(this.variablesLink);
+			this.navPanel.Controls.Add(this.equationsLink);
 			this.navPanel.Dock = System.Windows.Forms.DockStyle.Left;
 			this.navPanel.Location = new System.Drawing.Point(15, 15);
 			this.navPanel.Margin = new System.Windows.Forms.Padding(3, 3, 15, 3);
@@ -775,6 +777,33 @@
 			this.variablesLink.KeyDown += new System.Windows.Forms.KeyEventHandler(this.DoLinkKeyDown);
 			this.variablesLink.Click += new System.EventHandler(this.DoLinkClicked);
 			// 
+			// equationsLink
+			// 
+			this.equationsLink.Active = false;
+			this.equationsLink.ActiveLinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(0)))), ((int)(((byte)(0)))), ((int)(((byte)(0)))));
+			this.equationsLink.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+			this.equationsLink.Cursor = System.Windows.Forms.Cursors.Hand;
+			this.equationsLink.HoverColor = System.Drawing.Color.Orchid;
+			this.equationsLink.LinkBehavior = System.Windows.Forms.LinkBehavior.NeverUnderline;
+			this.equationsLink.LinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(0)))), ((int)(((byte)(0)))), ((int)(((byte)(0)))));
+			this.equationsLink.Location = new System.Drawing.Point(8, 643);
+			this.equationsLink.Name = "equationsLink";
+			this.equationsLink.NavMode = true;
+			this.equationsLink.Padding = new System.Windows.Forms.Padding(8, 0, 0, 0);
+			this.equationsLink.Selected = false;
+			this.equationsLink.Size = new System.Drawing.Size(256, 20);
+			this.equationsLink.StrictColors = false;
+			this.equationsLink.TabIndex = 22;
+			this.equationsLink.TabStop = true;
+			this.equationsLink.Tag = 22;
+			this.equationsLink.Text = "Equations";
+			this.equationsLink.ThemedBack = null;
+			this.equationsLink.ThemedFore = null;
+			this.equationsLink.VisitedLinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(0)))), ((int)(((byte)(0)))), ((int)(((byte)(0)))));
+			this.equationsLink.KeyDown += new System.Windows.Forms.KeyEventHandler(this.DoLinkKeyDown);
+			this.equationsLink.Click += new System.EventHandler(this.DoLinkClicked);
+			// 
 			// SettingsDialog
 			// 
 			this.AcceptButton = this.okButton;
@@ -826,6 +855,7 @@
 		private UI.MoreLinkLabel keyboardLink;
 		private UI.MoreLinkLabel markdownLink;
 		private UI.MoreLinkLabel navigatorLink;
+		private UI.MoreLinkLabel equationsLink;
 		private UI.MoreLinkLabel pageLink;
 		private UI.MoreLinkLabel pluginsLink;
 		private UI.MoreLinkLabel quickNotesLink;

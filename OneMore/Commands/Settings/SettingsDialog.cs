@@ -37,7 +37,8 @@ namespace River.OneMoreAddIn.Settings
 			SearchIndex,
 			Snippets,
 			TableThemes,
-			Variables
+			Variables,
+			Equations
 		}
 
 		private readonly Dictionary<int, SheetBase> sheets;
@@ -84,6 +85,7 @@ namespace River.OneMoreAddIn.Settings
 				snippetsLink.Text = Resx.word_Snippets;
 				tableThemesLink.Text = Resx.TableThemesSheet_Title;
 				variablesLink.Text = Resx.VariablesSheet_Title;
+				equationsLink.Text = Resx.EquationSheet_Title;
 			}
 
 			this.ribbon = ribbon;
@@ -96,7 +98,8 @@ namespace River.OneMoreAddIn.Settings
 				generalLink, colorizerLink, colorsLink, aliasLink, contextLink,
 				favoritesLink, fileImportLink, hashtagsLink, highlightLink, imagesLink,
 				keyboardLink, markdownLink, navigatorLink, pageLink, pluginsLink, quickNotesLink,
-				ribbonLink, searchLink, searchIndexLink, snippetsLink, tableThemesLink, variablesLink
+				ribbonLink, searchLink, searchIndexLink, snippetsLink, tableThemesLink, variablesLink,
+				equationsLink
 			};
 
 			activeIndex = 0;
@@ -292,6 +295,7 @@ namespace River.OneMoreAddIn.Settings
 					18 => new IndexSheet(provider),
 					19 => new SnippetsSheet(provider, ribbon),
 					20 => new TableThemesSheet(provider, ribbon),
+					22 => new EquationSheet(provider),
 					_ => new VariablesSheet(provider)
 				};
 

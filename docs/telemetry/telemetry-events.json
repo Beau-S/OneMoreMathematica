@@ -86,6 +86,7 @@
     "EmbedSubpageProxy",
     "EnableSpellCheck",
     "EnableSpellCheckCLI",
+    "Equation",
     "Expando",
     "Export",
     "ExportCLI",

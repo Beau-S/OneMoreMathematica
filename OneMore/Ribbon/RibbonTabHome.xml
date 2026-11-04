@@ -423,6 +423,13 @@
           getLabel="GetRibbonLabel"
           getScreentip="GetRibbonScreentip"
           onAction="PreviewMarkdownCmd"/>
+        <menuSeparator id="ribEditMenuEquation"/>
+        <button
+          id="ribEquationButton"
+          imageMso="EquationInsertNew"
+          getLabel="GetRibbonLabel"
+          getScreentip="GetRibbonScreentip"
+          onAction="EquationCmd"/>
         <menuSeparator id="ribEditMenuCase"/>
         <button
           id="ribLowercaseButton"

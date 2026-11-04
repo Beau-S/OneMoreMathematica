@@ -851,6 +851,11 @@ namespace River.OneMoreAddIn
 			=> await factory.Run<PlantUmlCommand>();
 
 
+		[Command("ribEquationButton_Label", Keys.Control | Keys.Alt | Keys.E, "ribEditMenu")]
+		public async Task EquationCmd(IRibbonControl control)
+			=> await factory.Run<EquationCommand>();
+
+
 		[Command("ribPreviewMarkdownButton_Label", Keys.None, "ribEditMenu")]
 		public async Task PreviewMarkdownCmd(IRibbonControl control)
 			=> await factory.Run<PreviewMarkdownCommand>();

@@ -5882,6 +5882,18 @@ Help Tab</value>
     <value>Preview page or selected text as markdown</value>
     <comment>ribbon edit</comment>
   </data>
+  <data name="ribEquationButton_Label" xml:space="preserve">
+    <value>Insert Equation</value>
+    <comment>ribbon edit</comment>
+  </data>
+  <data name="ribEquationButton_Screentip" xml:space="preserve">
+    <value>Write an equation in Mathematica syntax and insert it as a OneNote equation or image</value>
+    <comment>ribbon edit</comment>
+  </data>
+  <data name="EquationSheet_Title" xml:space="preserve">
+    <value>Equations</value>
+    <comment>settings sheet title</comment>
+  </data>
   <data name="ribPreviousUnreadPageButton_Label" xml:space="preserve">
     <value>Previous Unread Page</value>
     <comment>ribbon search</comment>

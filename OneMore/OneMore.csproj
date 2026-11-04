@@ -304,6 +304,13 @@
     <Compile Include="Commands\Numbering\NumberLinesCommand.cs" />
     <Compile Include="Commands\Page\DuplicateLineCommand.cs" />
     <Compile Include="Commands\Edit\PreviewMarkdownCommand.cs" />
+    <Compile Include="Commands\Equations\EquationCommand.cs" />
+    <Compile Include="Commands\Equations\EquationDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Commands\Settings\EquationSheet.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
     <Compile Include="Commands\File\FileQuickNotesCommand.cs" />
     <Compile Include="Commands\File\Markdown\MarkdownConverter.cs" />
     <Compile Include="Commands\File\Markdown\OneMoreDig.cs" />
@@ -1705,6 +1712,15 @@
     </EmbeddedResource>
     <EmbeddedResource Include="Commands\Page\CreatePagesDialog.resx">
       <DependentUpon>CreatePagesDialog.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Commands\Equations\Web\equation.html">
+      <LogicalName>River.OneMoreAddIn.Equations.equation.html</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Commands\Equations\Web\mma.js">
+      <LogicalName>River.OneMoreAddIn.Equations.mma.js</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Commands\Equations\Web\tex-svg-full.js">
+      <LogicalName>River.OneMoreAddIn.Equations.tex-svg-full.js</LogicalName>
     </EmbeddedResource>
     <EmbeddedResource Include="Commands\Settings\MarkdownSheet.resx">
       <DependentUpon>MarkdownSheet.cs</DependentUpon>

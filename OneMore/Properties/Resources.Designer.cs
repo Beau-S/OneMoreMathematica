@@ -13638,6 +13638,33 @@ namespace River.OneMoreAddIn.Properties {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Insert Equation.
+        /// </summary>
+        internal static string ribEquationButton_Label {
+            get {
+                return ResourceManager.GetString("ribEquationButton_Label", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Write an equation in Mathematica syntax and insert it as a OneNote equation or image.
+        /// </summary>
+        internal static string ribEquationButton_Screentip {
+            get {
+                return ResourceManager.GetString("ribEquationButton_Screentip", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Equations.
+        /// </summary>
+        internal static string EquationSheet_Title {
+            get {
+                return ResourceManager.GetString("EquationSheet_Title", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Preview Markdown.
         /// </summary>
         internal static string ribPreviewMarkdownButton_Label {
