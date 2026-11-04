@@ -242,6 +242,19 @@ namespace River.OneMoreAddIn.Commands
 					HostName, folder, CoreWebView2HostResourceAccessKind.Allow);
 
 				core.WebMessageReceived += ReceiveMessage;
+				core.ProcessFailed += (s, a) =>
+				{
+					logger.WriteLine($"equation editor web process failed: {a.ProcessFailedKind}");
+					if (a.ProcessFailedKind == CoreWebView2ProcessFailedKind.BrowserProcessExited)
+					{
+						// the web view can't recover; close the panel instead of leaving it dead
+						BeginInvoke(new Action(Close));
+					}
+					else
+					{
+						BeginInvoke(new Action(() => webView.CoreWebView2?.Reload()));
+					}
+				};
 				core.NavigationCompleted += (s, a) =>
 				{
 					ready = a.IsSuccess;

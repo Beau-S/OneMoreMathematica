@@ -55,8 +55,46 @@
   const REV_NAMED = {};
   Object.keys(NAMED).forEach(k => { if (!(NAMED[k] in REV_NAMED)) REV_NAMED[NAMED[k]] = k; });
 
-  const OPCHARS = '→⧴≤≥≠×⨯·÷±∓≈∝⇒⇔∧∨¬∪∩⊂⊆≡⊗∈∉';
-  const SINGLE_ID = new Set([...'∞∂∇°ℏħℓℝℂℤℕℚⅈⅇⅆÅµ…□']);
+  // LaTeX-style names accepted in the source (\alpha) and offered by the editor's \ prefix
+  const TEX_NAMES = {};
+  GREEK.forEach((n, i) => {
+    TEX_NAMES[n] = n === 'epsilon' ? 'ϵ' : (n === 'phi' ? 'ϕ' : GREEK_LO[i]);
+    const cap = n[0].toUpperCase() + n.slice(1);
+    TEX_NAMES[cap] = GREEK_UP[i];
+  });
+  Object.assign(TEX_NAMES, {
+    varepsilon: 'ε', vartheta: 'ϑ', varphi: 'φ', varrho: 'ϱ', varsigma: 'ς', varpi: 'ϖ', varkappa: 'ϰ',
+    infty: '∞', infinity: '∞', partial: '∂', nabla: '∇', hbar: 'ℏ', ell: 'ℓ', aleph: 'ℵ', wp: '℘', deg: '°', degree: '°',
+    pm: '±', mp: '∓', times: '×', cdot: '·', div: '÷', circ: '∘', oplus: '⊕', otimes: '⊗', dagger: '†',
+    leq: '≤', le: '≤', geq: '≥', ge: '≥', neq: '≠', ne: '≠', approx: '≈', equiv: '≡', sim: '∼', cong: '≅',
+    propto: '∝', ll: '≪', gg: '≫', perp: '⊥', parallel: '∥',
+    to: '→', rightarrow: '→', leftarrow: '←', leftrightarrow: '↔', Rightarrow: '⇒', implies: '⇒',
+    Leftrightarrow: '⇔', iff: '⇔', mapsto: '→',
+    in: '∈', notin: '∉', subset: '⊂', subseteq: '⊆', supset: '⊃', supseteq: '⊇', cup: '∪', cap: '∩',
+    setminus: '∖', emptyset: '∅', varnothing: '∅', forall: '∀', exists: '∃', nexists: '∄',
+    neg: '¬', lnot: '¬', land: '∧', wedge: '∧', lor: '∨', vee: '∨', angle: '∠',
+    sum: '∑', prod: '∏', int: '∫', oint: '∮', ldots: '…', dots: '…', cdots: '…', square: '□'
+  });
+  // accents typed after their base, Word/UnicodeMath style: C\tilde → C̃ (stored as combining marks)
+  const ACCENT_MARKS = { '\u0303': 'OverTilde', '\u0302': 'OverHat', '\u0304': 'OverBar', '\u0307': 'OverDot',
+    '\u0308': 'OverDot2', '\u20D7': 'OverVector' };
+  const ACCENT_NAMES = { tilde: '\u0303', hat: '\u0302', bar: '\u0304', dot: '\u0307', ddot: '\u0308', vec: '\u20D7' };
+  // extra single-character symbols and infix relations
+  const EXTRA_SYM = { '∀': '\\forall', '∃': '\\exists', '∄': '\\nexists', '∅': '\\emptyset', '∑': '\\sum',
+    '∏': '\\prod', '∫': '\\int', '∮': '\\oint', '√': '\\surd', '†': '\\dagger', 'ℵ': '\\aleph', '℘': '\\wp',
+    '∠': '\\angle', 'ⅉ': '\\mathrm{j}', '′': '\\prime' };
+  const EXTRA_REL = { '⊃': ['Superset', '\\supset', 250], '⊇': ['SupersetEqual', '\\supseteq', 250],
+    '≪': ['MuchLess', '\\ll', 290], '≫': ['MuchGreater', '\\gg', 290], '≅': ['TildeFullEqual', '\\cong', 290],
+    '∼': ['Tilde', '\\sim', 290], '⊥': ['Perpendicular', '\\perp', 290], '∥': ['Parallel', '\\parallel', 290],
+    '←': ['LeftArrow', '\\leftarrow', 120], '↔': ['LeftRightArrow', '\\leftrightarrow', 205],
+    '⊕': ['CirclePlus', '\\oplus', 310], '∘': ['Composition', '\\circ', 625], '∖': ['Complement', '\\setminus', 300] };
+
+  Object.assign(UNI_TEX, EXTRA_SYM);
+  Object.assign(UNI_NAME, { '∀': 'forall', '∃': 'exists', '∄': 'nexists', '∅': 'emptyset', '∑': 'sum', '∏': 'prod',
+    '∫': 'int', '∮': 'oint', '√': 'sqrt', '†': 'dagger', 'ℵ': 'aleph', '℘': 'wp', '∠': 'angle', 'ⅉ': 'j', '′': 'prime',
+    '\u0303': 'tilde', '\u0302': 'hat', '\u0304': 'bar', '\u0307': 'dot', '\u0308': 'ddot', '\u20D7': 'vec' });
+  const OPCHARS = '→⧴≤≥≠×⨯·÷±∓≈∝⇒⇔∧∨¬∪∩⊂⊆≡⊗∈∉' + Object.keys(EXTRA_REL).join('');
+  const SINGLE_ID = new Set([...'∞∂∇°ℏħℓℝℂℤℕℚⅈⅇⅆÅµ…□' + Object.keys(EXTRA_SYM).join('')]);
   const OPS = ['===', '=!=', '//.', ':=', '->', ':>', '==', '!=', '<=', '>=', '&&', '||', '/.', '//', '@@', '/@',
     '+', '-', '*', '/', '^', '=', '<', '>', '!', "'", '.', ',', ';', '&', '@', '(', ')', '{', '}', '[', ']', ...OPCHARS];
 
@@ -73,6 +111,10 @@
   // Tokenizer
   // ------------------------------------------------------------------
   function tokenize(src) {
+    // LaTeX-style names and postfix accents: \alpha → α, C\tilde → C̃, C^~ → C̃
+    src = src.replace(/\\([A-Za-z]+)/g, (m, n) =>
+      ACCENT_NAMES[n] !== undefined ? ACCENT_NAMES[n] : (TEX_NAMES[n] !== undefined ? TEX_NAMES[n] : m));
+    src = src.replace(/\^~/g, '\u0303');
     src = src.replace(/\\\[([A-Za-z]+)\]/g, (m, n, off) => {
       if (!(n in NAMED)) throw new MmaError('Unknown named character \\[' + n + ']', off);
       return NAMED[n];
@@ -95,8 +137,12 @@
         let j = i + 1;
         if (!SINGLE_ID.has(c)) while (j < src.length && isIdPart(src[j])) j++;
         let name = src.slice(i, j);
+        const acc = [];
+        while (ACCENT_MARKS[src[j]]) acc.push(ACCENT_MARKS[src[j++]]);
         let pat = null, sub = null, label = null;
-        const subm = src[j] === '_' ? /^_([0-9]+|[a-z\u0370-\u03FF][A-Za-z0-9\u0370-\u03FF]*)/.exec(src.slice(j)) : null;
+        // x_1, x_i, C_T, P_out are subscripts; x_, x__ and x_Integer-style heads stay patterns
+        let subm = src[j] === '_' ? /^_([0-9]+|[A-Za-z\u0370-\u03FF][A-Za-z0-9\u0370-\u03FF]*)/.exec(src.slice(j)) : null;
+        if (subm && PATTERN_HEADS.has(subm[1])) subm = null;
         if (src[j] === '_' && src[j + 1] === '{') {
           const close = src.indexOf('}', j);
           if (close < 0) throw new MmaError('Missing "}" in subscript label', j);
@@ -112,7 +158,7 @@
           pat = src.slice(j, k); j = k;
         }
         name = CANON[name] || name;
-        toks.push({ t: 'id', v: name, pat, sub, label, sp, pos: start });
+        toks.push({ t: 'id', v: name, pat, sub, label, acc, sp, pos: start });
         i = j;
       } else if (c === '#') {
         let j = i + 1;
@@ -180,6 +226,18 @@
     '^': [590, 'Power', 'R'], '!': [610], '/@': [620, 'Map', 'R'], '@@': [620, 'Apply', 'R'],
     '@': [640], "'": [670], '[': [1000]
   };
+  Object.keys(EXTRA_REL).forEach(ch => { INFIX[ch] = [EXTRA_REL[ch][2], EXTRA_REL[ch][0], ch === '⊕' ? 'F' : undefined]; });
+
+  const PATTERN_HEADS = new Set(['Integer', 'Real', 'Complex', 'Rational', 'String', 'List', 'Symbol', 'Rule', 'Times', 'Plus', 'Power']);
+  // index subscripts (italic): i, j, ij, mn ... but not the word "in"
+  const isIndexName = n => /^[ijklmn]{1,3}$/.test(n) && n !== 'in';
+
+  const PAREN_FUNCS = {
+    sin: 'Sin', cos: 'Cos', tan: 'Tan', cot: 'Cot', sec: 'Sec', csc: 'Csc', sinh: 'Sinh', cosh: 'Cosh', tanh: 'Tanh',
+    arcsin: 'ArcSin', arccos: 'ArcCos', arctan: 'ArcTan', asin: 'ArcSin', acos: 'ArcCos', atan: 'ArcTan',
+    exp: 'Exp', ln: 'Log', log: 'Log', log10: 'Log10', log2: 'Log2', sqrt: 'Sqrt', abs: 'Abs', sgn: 'Sign',
+    max: 'Max', min: 'Min', det: 'Det', tr: 'Tr', erf: 'Erf'
+  };
 
   class Parser {
     constructor(toks) { this.toks = toks; this.i = 0; }
@@ -228,15 +286,22 @@
     nud(t) {
       if (t.t === 'num') return Num(t.v, t.e);
       if (t.t === 'id') {
-        const s = S(t.v);
+        let s = S(t.v);
         if (t.pat != null) s.pat = t.pat;
+        (t.acc || []).forEach(a => { s = a === 'OverDot2' ? C('OverDot', s, Num('2')) : C(a, s); });
         if (t.label != null) {
           const parts = t.label.split(',').map(x => x.trim());
-          if (parts.every(x => /^([ijklmn]+|[0-9]+)$/.test(x)))
+          if (parts.every(x => /^[0-9]+$/.test(x) || isIndexName(x)))
             return C('Subscript', s, ...parts.map(x => /^[0-9]/.test(x) ? Num(x) : S(x)));
           return C('Subscript', s, { k: 'str', v: t.label.replace(/"/g, '') });
         }
         if (t.sub != null) return C('Subscript', s, /^[0-9]/.test(t.sub) ? Num(t.sub) : S(CANON[t.sub] || t.sub));
+        // sin(x), sqrt(x), ln(x) ...: standard functions also accept parentheses
+        const n = this.peek();
+        if (PAREN_FUNCS[t.v] && n && n.t === 'op' && n.v === '(' && !n.sp) {
+          this.next();
+          return { k: 'call', h: S(PAREN_FUNCS[t.v]), a: this.args(')') };
+        }
         return s;
       }
       if (t.t === 'str') return { k: 'str', v: t.v };
@@ -364,6 +429,7 @@
     Union: ['\\cup', 300], Intersection: ['\\cap', 305], Dot: ['\\cdot', 490], Cross: ['\\times', 398],
     CircleTimes: ['\\otimes', 397], PlusMinus: ['\\pm', 310], MinusPlus: ['\\mp', 310], ReplaceRepeated: ['/\\!/.', 110]
   };
+  Object.keys(EXTRA_REL).forEach(ch => { const [name, tex, bp] = EXTRA_REL[ch]; BIN[name] = [tex, bp]; });
   const SUBFN = { BesselJ: 'J', BesselY: 'Y', BesselI: 'I', BesselK: 'K', SphericalBesselJ: 'j', SphericalBesselY: 'y',
     HermiteH: 'H', ChebyshevT: 'T', ChebyshevU: 'U', LegendreQ: 'Q', HankelH1: 'H^{(1)}', HankelH2: 'H^{(2)}' };
   const HOLD = new Set(['Hold', 'HoldForm', 'Defer', 'Unevaluated', 'Inactivate', 'TraditionalForm', 'StandardForm',
@@ -603,7 +669,7 @@
       const upright = x => x.k === 'str' ||
         (x.k === 'sym' && [...x.n].length > 1 && !GREEK_SET.has(x.n) && !VAR_GREEK.has(x.n) && !TEX_CAPS.has(x.n) &&
           SYM_TEX[x.n] === undefined && !/[0-9]$/.test(x.n) && !/(ddot|dot|hat|bar|vec|tilde)$/.test(x.n) &&
-          !/^[ijklmn]+$/.test(x.n));
+          !isIndexName(x.n));
       if (subs.every(upright)) return `\\mathrm{${subs.map(x => texEscape(x.k === 'str' ? x.v : x.n)).join(',')}}`;
       return subs.map(x => upright(x) ? `\\mathrm{${texEscape(x.k === 'str' ? x.v : x.n)}}` : this.tex(x)).join(',');
     }
@@ -903,6 +969,10 @@
     if (acc[h] && n.a.length >= 1 && n.a[0].k === 'sym') {
       const k = h === 'OverDot' && n.a[1] && isInt(n.a[1]) && n.a[1].v === '2' ? 'ddot' : acc[h];
       return n.a[0].n + k;
+    }
+    if (h === 'Subscript' && n.a.length >= 2 && n.a[0].k !== 'sym' && symbolLike(n.a[0]) &&
+        n.a.slice(1).every(x => x.k === 'sym' || x.k === 'str' || (isInt(x) && !isNegNum(x)))) {
+      return symbolLike(C('Subscript', S(symbolLike(n.a[0])), ...n.a.slice(1)));
     }
     if (h === 'Subscript' && n.a.length >= 2 && n.a[0].k === 'sym' &&
         n.a.slice(1).every(x => x.k === 'sym' || x.k === 'str' || (isInt(x) && !isNegNum(x)))) {
@@ -1573,5 +1643,5 @@
     };
   }
 
-  return { parse, tokenize, toTeX, toMathematica, toCode, convert, MmaError, NAMED };
+  return { parse, tokenize, toTeX, toMathematica, toCode, convert, MmaError, NAMED, TEX_NAMES, GREEK_NAMES: GREEK, PAREN_FUNCS };
 });

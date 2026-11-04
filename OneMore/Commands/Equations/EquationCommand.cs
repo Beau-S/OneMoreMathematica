@@ -152,14 +152,15 @@ namespace River.OneMoreAddIn.Commands
 				return EquationOutcome.NoAnchor;
 			}
 
+			// the equation always gets its own paragraph so the paragraph you type in keeps its
+			// normal font; on an empty line it goes just above, leaving the line for typing
 			if (IsEmptyParagraph(anchor, ns))
 			{
-				// reuse the empty line the cursor sits on
-				Fill(anchor, ns, meta, content);
+				anchor.AddBeforeSelf(new XElement(ns + "OE", meta, content));
 				return EquationOutcome.Inserted;
 			}
 
-			// insert after the cursor's paragraph and after any equations already inserted
+			// otherwise after the cursor's paragraph and after any equations already inserted
 			// there, so a series of equations stays in the order it was typed
 			var after = anchor;
 			while (after.NextNode is XElement next &&

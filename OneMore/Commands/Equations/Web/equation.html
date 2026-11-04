@@ -73,6 +73,13 @@ kbd { font: 11px var(--font-code); border: 1px solid var(--rule); border-radius:
 .toast { position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 6px 12px;
   border-radius: 3px; opacity: 0; transition: opacity .15s; pointer-events: none; }
 .toast.show { opacity: 1; }
+
+.symsearch { width: 100%; margin-top: 8px; font: 12.5px var(--font-ui); color: var(--ink); background: var(--cell); border: 1px solid var(--rule); border-radius: 3px; padding: 4px 6px; }
+.symlist { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 2px; margin-top: 6px; max-height: 220px; overflow-y: auto; }
+.sym { display: flex; gap: 6px; align-items: baseline; text-align: left; border: 0; background: none; padding: 3px 5px; border-radius: 3px; cursor: pointer; color: var(--ink); min-width: 0; }
+.sym:hover { background: var(--accent-soft); }
+.sym b { font: 16px "Cambria Math", "STIX Two Math", serif; min-width: 1.3em; text-align: center; font-weight: 400; }
+.sym span { font: 11px var(--font-code); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -87,10 +94,11 @@ kbd { font: 11px var(--font-code); border: 1px solid var(--rule); border-radius:
     <details class="help">
       <summary>Keyboard</summary>
       <ul>
-        <li><kbd>Esc</kbd> p <kbd>Esc</kbd> → π, <kbd>Esc</kbd> D <kbd>Esc</kbd> → Δ, <kbd>Esc</kbd> inf <kbd>Esc</kbd> → ∞, <kbd>Esc</kbd> int <kbd>Esc</kbd> → integral</li>
-        <li><code>\alpha</code> then <kbd>Space</kbd> → α</li>
-        <li><kbd>Ctrl</kbd>+<kbd>-</kbd> subscript · <kbd>Ctrl</kbd>+<kbd>6</kbd> superscript · <kbd>Ctrl</kbd>+<kbd>/</kbd> fraction · <kbd>Ctrl</kbd>+<kbd>2</kbd> root</li>
-        <li><kbd>Ctrl</kbd>+<kbd>Space</kbd> leaves a subscript/superscript · <kbd>Tab</kbd> next □</li>
+        <li><kbd>Esc</kbd> p <kbd>Esc</kbd> (or <kbd>Esc</kbd> p <kbd>Tab</kbd>) → π · <kbd>Esc</kbd> D <kbd>Esc</kbd> → Δ · <kbd>Esc</kbd> inf <kbd>Esc</kbd> → ∞ · <kbd>Esc</kbd> dintt <kbd>Esc</kbd> → integral</li>
+        <li><code>\rho</code>, <code>\delta</code>, <code>\leq</code> convert as soon as you type the next non-letter</li>
+        <li><code>C\tilde</code>, <code>v\hat</code>, <code>x\dot</code> put the accent on the letter before (also <code>C^~</code>)</li>
+        <li><kbd>Ctrl</kbd>+<kbd>-</kbd> subscript · <kbd>Ctrl</kbd>+<kbd>6</kbd> superscript · <kbd>Space</kbd> or <kbd>→</kbd> leaves it</li>
+        <li><kbd>Ctrl</kbd>+<kbd>/</kbd> fraction · <kbd>Ctrl</kbd>+<kbd>2</kbd> root · <kbd>Tab</kbd> next □ · <code>sin(x)</code>, <code>sqrt(x)</code> work like <code>Sin[x]</code></li>
         <li><code>P_{e,in}</code> upright label · <code>x_{i}</code>, <code>A_{ij}</code> italic index · <code>x_{"i"}</code> forces upright</li>
         <li><kbd>Ctrl</kbd>+<kbd>Enter</kbd> inserts · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd> inserts the other type</li>
       </ul>
@@ -102,11 +110,22 @@ kbd { font: 11px var(--font-code); border: 1px solid var(--rule); border-radius:
       <pre id="code" tabindex="0"></pre>
       <button class="btn small copy" id="copy">Copy</button>
     </div>
+    <details id="shortcutsPanel">
+      <summary>Shortcuts</summary>
+      <div class="settings">
+        <label for="optAliasKey">Alias key</label>
+        <select id="optAliasKey"><option value="Escape">Esc  (Esc a Esc → α)</option><option value="`">`  (`a` → α)</option><option value=";">;  (;a; → α)</option><option value="off">Off</option></select>
+        <label for="optNamePrefix">Name prefix</label>
+        <select id="optNamePrefix"><option value="\">\  (\alpha → α)</option><option value="off">Off</option></select>
+        <label class="check"><input type="checkbox" id="optBare"> No prefix: alpha, delta, infty… convert at the end of the word</label>
+        <label class="check"><input type="checkbox" id="optSpaceExits"> Space leaves a subscript or superscript</label>
+      </div>
+      <input type="search" id="symSearch" class="symsearch" placeholder="Search symbols: delta, ≤, int, tilde…" aria-label="Search symbols">
+      <div class="symlist" id="symList"></div>
+    </details>
     <details>
       <summary>Display</summary>
       <div class="settings">
-        <label for="optKeys">Shortcuts</label>
-        <select id="optKeys"><option value="both">Esc a Esc and \alpha</option><option value="mathematica">Esc a Esc only</option><option value="latex">\alpha only</option></select>
         <label for="optNotation">Notation</label>
         <select id="optNotation"><option value="iso">ISO 80000-2</option><option value="classic">Classic</option></select>
         <label for="optMult">Multiplication</label>
@@ -136,6 +155,7 @@ kbd { font: 11px var(--font-code); border: 1px solid var(--rule); border-radius:
   <span class="grow" id="hint"></span>
   <button class="btn small" id="editSel" title="Load the equation under OneNote's cursor">Edit selected</button>
   <button class="btn small" id="newEq" title="Start a new equation">New</button>
+  <button class="btn small" id="dockBtn" title="Dock the panel to OneNote or let it float">Float</button>
   <span class="spacer"></span>
   <button class="btn" id="insImage">Insert image</button>
   <button class="btn" id="insNative">Insert equation</button>
@@ -178,7 +198,7 @@ window.MathJax = {
 
   const src = $('src'), preview = $('preview'), code = $('code');
   let timer = null;
-  const opts = Object.assign({ keys: 'both', notation: 'iso', mult: 'space', frac: 'frac', deriv: 'auto', diff: 'roman', matrix: 'pmatrix', bg: init.theme === 'dark' },
+  const opts = Object.assign({ aliasKey: 'Escape', namePrefix: '\\', bareNames: false, spaceExits: true, notation: 'iso', mult: 'space', frac: 'frac', deriv: 'auto', diff: 'roman', matrix: 'pmatrix', bg: init.theme === 'dark' },
     store.get('opts', {}), { size: init.size, color: init.color });
   let tab = store.get('tab', 'tex');
   let result = null;
@@ -199,7 +219,7 @@ window.MathJax = {
   // keep the default button last (rightmost)
   primary.parentNode.appendChild(primary);
 
-  const keys = EqKeys.attach(src, { onChange: () => { clearTimeout(timer); timer = setTimeout(update, 120); }, style: () => opts.keys });
+  const keys = EqKeys.attach(src, { onChange: () => { clearTimeout(timer); timer = setTimeout(update, 120); }, config: () => shortcutConfig() });
   CHIPS.forEach(([label, text]) => {
     const btn = document.createElement('button');
     btn.type = 'button'; btn.className = 'chip' + (text.length === 1 ? ' gk' : ''); btn.textContent = label; btn.title = text;
@@ -220,8 +240,32 @@ window.MathJax = {
       const { size, color, ...persist } = opts; store.set('opts', persist); update();
     });
   };
-  bind('optKeys', 'keys'); bind('optNotation', 'notation'); bind('optMult', 'mult'); bind('optFrac', 'frac'); bind('optDeriv', 'deriv'); bind('optDiff', 'diff'); bind('optMatrix', 'matrix');
+  bind('optAliasKey', 'aliasKey'); bind('optNamePrefix', 'namePrefix'); bind('optBare', 'bareNames', 'checked'); bind('optSpaceExits', 'spaceExits', 'checked'); bind('optNotation', 'notation'); bind('optMult', 'mult'); bind('optFrac', 'frac'); bind('optDeriv', 'deriv'); bind('optDiff', 'diff'); bind('optMatrix', 'matrix');
   bind('optSize', 'size'); bind('optColor', 'color'); bind('optBg', 'bg', 'checked');
+
+  // ---- shortcut settings and the searchable symbol list
+  function shortcutConfig() { return { aliasKey: opts.aliasKey, namePrefix: opts.namePrefix, bareNames: opts.bareNames, spaceExits: opts.spaceExits }; }
+  function drawSymbols() {
+    const q = ($('symSearch').value || '').trim().toLowerCase();
+    const list = $('symList'); list.replaceChildren();
+    EqKeys.catalog(shortcutConfig())
+      .filter(([shown, value, how]) => !q || shown.toLowerCase().includes(q) || value.toLowerCase().includes(q) || how.some(h => h.toLowerCase().includes(q)))
+      .slice(0, 400)
+      .forEach(([shown, value, how]) => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'sym'; b.title = how.join('   ');
+        const sym = document.createElement('b'); sym.textContent = /^[\u0300-\u036f\u20d7]$/.test(value) ? '◌' + value : shown;
+        const h = document.createElement('span'); h.textContent = how[0];
+        b.append(sym, h);
+        b.addEventListener('mousedown', e => e.preventDefault());
+        b.addEventListener('click', () => { src.focus(); keys.replaceSelection(value); });
+        list.appendChild(b);
+      });
+  }
+  $('symSearch').addEventListener('input', drawSymbols);
+  ['optAliasKey', 'optNamePrefix', 'optBare', 'optSpaceExits'].forEach(id => $(id).addEventListener('input', drawSymbols));
+  drawSymbols();
+
 
   // ---- conversion
   src.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(update, 120); });
@@ -349,6 +393,10 @@ window.MathJax = {
   $('insNative').addEventListener('click', () => insert('native'));
   $('insImage').addEventListener('click', () => insert('image'));
   $('editSel').addEventListener('click', () => post({ action: 'load' }));
+  let dock = init.dock || 'right';
+  const showDock = () => { $('dockBtn').textContent = dock === 'float' ? 'Dock' : 'Float'; };
+  showDock();
+  $('dockBtn').addEventListener('click', () => post({ action: 'dock', dock: dock === 'float' ? 'right' : 'float' }));
   $('newEq').addEventListener('click', () => { post({ action: 'new' }); setEditing(false); src.value = ''; update(); src.focus(); });
 
   // messages from OneMore
@@ -362,6 +410,7 @@ window.MathJax = {
     }
     else if (m.action === 'error') toast(m.message);
     else if (m.action === 'focus') src.focus();
+    else if (m.action === 'dockstate') { dock = m.dock; showDock(); }
   });
 
   window.__mjReady = () => { mjReady = true; renderPreview(); showOutput(); setButtons(); };
