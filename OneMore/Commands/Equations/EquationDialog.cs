@@ -9,12 +9,14 @@ namespace River.OneMoreAddIn.Commands
 	using Newtonsoft.Json;
 	using Newtonsoft.Json.Linq;
 	using River.OneMoreAddIn.Models;
+	using River.OneMoreAddIn.Settings;
 	using River.OneMoreAddIn.UI;
 	using System;
 	using System.Diagnostics;
 	using System.Drawing;
 	using System.IO;
 	using System.Reflection;
+	using System.Runtime.InteropServices;
 	using System.Threading;
 	using System.Windows.Forms;
 	using Resx = Properties.Resources;
@@ -57,6 +59,11 @@ namespace River.OneMoreAddIn.Commands
 	{
 		private const string HostName = "equation.onemore.local";
 		private const int PanelWidth = 470;
+		private const int SnapDistance = 56;
+		private const int DockInset = 8;
+		private const int WM_ENTERSIZEMOVE = 0x0231;
+		private const int WM_EXITSIZEMOVE = 0x0232;
+		private const uint GA_ROOT = 2;
 
 		private static readonly object Gate = new();
 		private static EquationDialog current;
@@ -67,8 +74,17 @@ namespace River.OneMoreAddIn.Commands
 		private readonly string initJson;
 		private readonly uint ownPid;
 		private uint oneNotePid;
+		private IntPtr oneNoteWindow;
 		private bool ready;
 		private bool busy;
+		private bool userMoving;
+		private bool hiddenWithOneNote;
+
+		// "right" or "left" when docked to that side of the OneNote window, "float" otherwise
+		private string dock;
+
+		// distance from the top of the OneNote window to the top of the docked panel
+		private int dockTop;
 
 		// objectID of the paragraph holding the equation being edited, or null for new
 		private string editingId;
@@ -78,6 +94,8 @@ namespace River.OneMoreAddIn.Commands
 		{
 			initJson = init.ToString(Formatting.None);
 			this.editingId = editingId;
+			dock = init.Value<string>("dock") ?? "right";
+			dockTop = init.Value<int?>("dockTop") ?? 150;
 
 			Text = "Equation";
 			MinimumSize = new Size(360, 380);
@@ -159,9 +177,14 @@ namespace River.OneMoreAddIn.Commands
 					panel.Height = Math.Max(panel.MinimumSize.Height, Math.Min(760, bounds.Height - 160));
 					panel.Width = PanelWidth;
 
-					var location = new Point(
-						Math.Max(bounds.Left, bounds.Right - panel.Width - 28),
-						bounds.Top + 130);
+					var location = panel.dock == "left"
+						? new Point(bounds.Left + DockInset, bounds.Top + panel.dockTop)
+						: new Point(Math.Max(bounds.Left, bounds.Right - panel.Width - DockInset), bounds.Top + panel.dockTop);
+
+					if (panel.dock != "float")
+					{
+						panel.Height = Math.Max(panel.MinimumSize.Height, bounds.Height - panel.dockTop - DockInset);
+					}
 
 					// blocks this thread's message loop until the panel closes
 					panel.RunModeless(location);
@@ -197,7 +220,9 @@ namespace River.OneMoreAddIn.Commands
 			{
 				using (var one = new OneNote())
 				{
-					Native.GetWindowThreadProcessId(one.WindowHandle, out oneNotePid);
+					oneNoteWindow = Native.GetAncestor(one.WindowHandle, GA_ROOT);
+					if (oneNoteWindow == IntPtr.Zero) oneNoteWindow = one.WindowHandle;
+					Native.GetWindowThreadProcessId(oneNoteWindow, out oneNotePid);
 				}
 
 				var folder = EnsureAssets();
@@ -217,7 +242,11 @@ namespace River.OneMoreAddIn.Commands
 					HostName, folder, CoreWebView2HostResourceAccessKind.Allow);
 
 				core.WebMessageReceived += ReceiveMessage;
-				core.NavigationCompleted += (s, a) => ready = a.IsSuccess;
+				core.NavigationCompleted += (s, a) =>
+				{
+					ready = a.IsSuccess;
+					Post(new JObject { ["action"] = "dockstate", ["dock"] = dock });
+				};
 
 				await core.AddScriptToExecuteOnDocumentCreatedAsync(
 					$"window.__eqInit = {initJson};");
@@ -242,9 +271,163 @@ namespace River.OneMoreAddIn.Commands
 		{
 			base.OnShown(e);
 			TopMost = true;
+			FollowOneNote();
 			Elevate();
 			webView.Focus();
 		}
+
+
+		protected override void WndProc(ref Message m)
+		{
+			if (m.Msg == WM_ENTERSIZEMOVE)
+			{
+				userMoving = true;
+			}
+			else if (m.Msg == WM_EXITSIZEMOVE)
+			{
+				userMoving = false;
+				DecideDock();
+			}
+
+			base.WndProc(ref m);
+		}
+
+
+		/// <summary>
+		/// After the user drags or resizes the panel: dock it when its edge is dropped near
+		/// the matching edge of the OneNote window, otherwise let it float.
+		/// </summary>
+		private void DecideDock()
+		{
+			if (!TryGetOneNoteBounds(out var r))
+			{
+				return;
+			}
+
+			var overlaps = Bottom > r.Top && Top < r.Bottom;
+			string next;
+			if (overlaps && Math.Abs(Right - (r.Right - DockInset)) <= SnapDistance)
+			{
+				next = "right";
+			}
+			else if (overlaps && Math.Abs(Left - (r.Left + DockInset)) <= SnapDistance)
+			{
+				next = "left";
+			}
+			else
+			{
+				next = "float";
+			}
+
+			if (next != "float")
+			{
+				dockTop = Math.Max(0, Math.Min(Top - r.Top, r.Height - MinimumSize.Height - DockInset));
+			}
+
+			SetDock(next);
+		}
+
+
+		private void SetDock(string next)
+		{
+			var changed = next != dock;
+			dock = next;
+
+			if (dock == "float" && changed && TryGetOneNoteBounds(out var r))
+			{
+				// step away from the edge so the change is visible
+				var height = Math.Min(Height, 640);
+				var left = dock == "float" && Left > r.Left + (r.Width / 2)
+					? Left - 60
+					: Left + 60;
+				SetBounds(left, Top + 40, Width, height);
+			}
+
+			FollowOneNote();
+			SaveDock();
+			Post(new JObject { ["action"] = "dockstate", ["dock"] = dock });
+		}
+
+
+		private void SaveDock()
+		{
+			try
+			{
+				var provider = new SettingsProvider();
+				var settings = provider.GetCollection(EquationCommand.SettingsName);
+				settings.Add("dock", dock);
+				settings.Add("dockTop", dockTop);
+				provider.SetCollection(settings);
+				provider.Save();
+			}
+			catch (Exception exc)
+			{
+				logger.WriteLine("error saving equation panel position", exc);
+			}
+		}
+
+
+		/// <summary>
+		/// Keeps a docked panel attached to its side of the OneNote window, and hides the
+		/// panel while OneNote is minimized.
+		/// </summary>
+		private void FollowOneNote()
+		{
+			if (userMoving || oneNoteWindow == IntPtr.Zero)
+			{
+				return;
+			}
+
+			if (IsIconic(oneNoteWindow))
+			{
+				if (Visible && dock != "float")
+				{
+					hiddenWithOneNote = true;
+					Hide();
+				}
+				return;
+			}
+
+			if (hiddenWithOneNote)
+			{
+				hiddenWithOneNote = false;
+				Show();
+			}
+
+			if (dock == "float" || !TryGetOneNoteBounds(out var r))
+			{
+				return;
+			}
+
+			var top = r.Top + Math.Min(dockTop, Math.Max(0, r.Height - MinimumSize.Height - DockInset));
+			var height = Math.Max(MinimumSize.Height, r.Bottom - DockInset - top);
+			var width = Math.Min(Width, Math.Max(MinimumSize.Width, r.Width / 2));
+			var left = dock == "left" ? r.Left + DockInset : r.Right - DockInset - width;
+
+			if (Left != left || Top != top || Width != width || Height != height)
+			{
+				SetBounds(left, top, width, height);
+			}
+		}
+
+
+		private bool TryGetOneNoteBounds(out Rectangle bounds)
+		{
+			var r = new Native.Rectangle();
+			if (oneNoteWindow != IntPtr.Zero && Native.GetWindowRect(oneNoteWindow, ref r))
+			{
+				bounds = new Rectangle(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top);
+				return bounds.Width > 0 && bounds.Height > 0;
+			}
+
+			bounds = Rectangle.Empty;
+			return false;
+		}
+
+
+		[DllImport("user32.dll")]
+		[return: MarshalAs(UnmanagedType.Bool)]
+		private static extern bool IsIconic(IntPtr hWnd);
 
 
 		protected override void OnFormClosed(FormClosedEventArgs e)
@@ -292,6 +475,8 @@ namespace River.OneMoreAddIn.Commands
 
 		private void TrackOneNote(object sender, EventArgs e)
 		{
+			FollowOneNote();
+
 			var foreground = Native.GetForegroundWindow();
 			if (foreground == IntPtr.Zero)
 			{
@@ -347,6 +532,10 @@ namespace River.OneMoreAddIn.Commands
 
 				case "new":
 					editingId = null;
+					break;
+
+				case "dock":
+					SetDock(message.Value<string>("dock") ?? "float");
 					break;
 
 				case "close":

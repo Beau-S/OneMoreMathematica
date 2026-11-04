@@ -78,6 +78,8 @@ namespace River.OneMoreAddIn.Commands
 				["editing"] = false,
 				["mode"] = settings.Get("mode", "native"),
 				["size"] = settings.Get("size", 20),
+				["dock"] = settings.Get("dock", "right"),
+				["dockTop"] = settings.Get("dockTop", 150),
 				["color"] = "#000000",
 				["theme"] = ThemeManager.Instance.DarkMode ? "dark" : "light"
 			};

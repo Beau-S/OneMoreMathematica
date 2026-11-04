@@ -17,6 +17,8 @@ namespace River.OneMoreAddIn.Settings
 	{
 		private readonly ComboBox modeBox;
 		private readonly NumericUpDown sizeBox;
+		private readonly ComboBox dockBox;
+		private static readonly string[] DockValues = { "right", "left", "float" };
 
 
 		public EquationSheet(SettingsProvider provider) : base(provider)
@@ -70,7 +72,36 @@ namespace River.OneMoreAddIn.Settings
 			var size = settings.Get("size", 20);
 			sizeBox.Value = size < 12 ? 12 : (size > 40 ? 40 : size);
 
+			var dockLabel = new Label
+			{
+				Text = "Editor panel:",
+				AutoSize = true,
+				Location = new Point(10, 176)
+			};
+
+			dockBox = new ComboBox
+			{
+				DropDownStyle = ComboBoxStyle.DropDownList,
+				Location = new Point(220, 172),
+				Width = 360
+			};
+			dockBox.Items.Add("Docked to the right of OneNote");
+			dockBox.Items.Add("Docked to the left of OneNote");
+			dockBox.Items.Add("Floating");
+			dockBox.SelectedIndex = System.Math.Max(0, System.Array.IndexOf(DockValues, settings.Get("dock", "right")));
+
+			var dockHint = new Label
+			{
+				Text = "Drag the panel to an edge of the OneNote window to dock it, or away to float it.",
+				AutoSize = false,
+				Location = new Point(220, 206),
+				Size = new Size(560, 40)
+			};
+
 			Controls.Add(intro);
+			Controls.Add(dockLabel);
+			Controls.Add(dockBox);
+			Controls.Add(dockHint);
 			Controls.Add(modeLabel);
 			Controls.Add(modeBox);
 			Controls.Add(sizeLabel);
@@ -84,6 +115,7 @@ namespace River.OneMoreAddIn.Settings
 
 			var save = settings.Add("mode", modeBox.SelectedIndex == 1 ? "image" : "native");
 			save = settings.Add("size", (int)sizeBox.Value) || save;
+			save = settings.Add("dock", DockValues[System.Math.Max(0, dockBox.SelectedIndex)]) || save;
 
 			if (save)
 			{
